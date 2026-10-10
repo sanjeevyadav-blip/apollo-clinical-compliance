@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 var CTX=null, TH=90;
 function drawStd(){
@@ -54,12 +54,35 @@ UI.page({
     return h;
   },
   after: function(){ document.getElementById("sProj").addEventListener("change", drawStd); document.getElementById("sType").addEventListener("change", drawStd); drawStd(); },
+  explain: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, S=UI.SRC, all=APP.parameters(c.D,c.s,c.e), flat=[];
+    Object.keys(all).forEach(function(t){ all[t].forEach(function(x){ flat.push(x); }); });
+    var w=flat.slice().sort(function(a,b){ return a.pct-b.pct; })[0];
+    return {
+      steps:[
+        {t:"Tiles at the top", see:"The share of all checklist items that are &lsquo;met&rsquo;, then one tile per audit type with items met (e.g. 10/17) and the lowest item.", mean:"Treats every checklist item as a standard doctors must follow, the way hospital accreditation (NABH) does.", look:"Audit types with few items met, and the item named as lowest."},
+        {t:"01 &middot; Ten most-missed checklist items", see:"The ten items with the lowest compliance across all audit types.", mean:"The behaviours doctors most often skip. This is your training list.", look:"Items below 75% (red bar)."},
+        {t:"02 &middot; Full checklist with filters", see:"Pick an audit type and a doctor type. Items are grouped (e.g. Clinical Parameters) with each group&rsquo;s weighted compliance in the grey header row.", mean:"Every item shows its points, how many audits scored it, its compliance, how often it got full marks, the change and whether the standard is met.", look:"&lsquo;Not met&rsquo; items with many points: they cost doctors the most score."}
+      ],
+      example: w ? '<p>Lowest item in '+esc(c.p.label)+': <b>'+esc(w.name)+'</b> ('+esc(w.type)+').</p><div class="eq">Points scored '+f1(w.got,0)+' &divide; points possible ('+fi(w.n)+' audits &times; '+fi(w.max)+' points) = <b>'+f1(w.pct,1)+'%</b> compliance</div><p>'+f1(w.fullPct,1)+'% of those audits gave this item its full points. Below 75% the standard counts as <b>not met</b>.</p>' : '',
+      terms:[
+        ["Checklist item (standard)","One thing the auditor checks, e.g. &lsquo;Patient identification&rsquo;.","One column of the audit sheet.",S.audit],
+        ["Points","The most an item can score.","From the item&rsquo;s heading (or the highest score seen).",S.audit],
+        ["Audits","How many audits scored this item in the period.","Count of audits with a value for the item.",S.audit],
+        ["Compliance","How well the item is followed overall.","Points scored &divide; points possible &times; 100.",S.calc],
+        ["Full marks","How often the item was done completely.","Audits where the item got its full points &divide; audits that scored it.",S.calc],
+        ["Met / Partly met / Not met","Standard status.","Met = 90% or more; partly met = 75&ndash;90%; not met = below 75%.",S.calc],
+        ["Weighted group compliance","Compliance of a whole group of items.","Items with more points count more.",S.calc],
+        ["Standards met %","Share of all items that are met.","Items at 90% or more &divide; all items.",S.calc],
+        ["NABH","National Accreditation Board for Hospitals &amp; Healthcare Providers.","This page uses the same idea: each item is a standard with a pass level.",""]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Standards</h3><p>Each line of the audit checklist (for example doctor introduction, history of past illness, red-flag advice, prescription hygiene) is a standard. Compliance is the share of its points scored across all audits.</p><p class="why">Pinpoints the exact behaviours behind the audit score.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Met / partly / not met</h3><p><span class="pill-st green">Met</span> 90% or more, <span class="pill-st amber">Partly met</span> 75–90%, <span class="pill-st red">Not met</span> below 75%. The headline counts how many items are met.</p><p class="why">The same language accreditation bodies use.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Using it</h3><p>Start with the ten most-missed items, then filter the full checklist by audit type and doctor type to see who misses what.</p><p class="why">Lets training focus on the few items that move the score.</p></div>'
 });
-
 </script>
 </body>
 </html>

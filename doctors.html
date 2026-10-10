@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 var DOCS=null, PREV={}, SORT={k:"score",dir:1};
 function drawTable(){
@@ -64,12 +64,39 @@ UI.page({
     Array.prototype.forEach.call(document.querySelectorAll("#docTbl th.s"), function(th){ th.addEventListener("click", function(){ var k=th.dataset.k; SORT = SORT.k===k ? {k:k,dir:-SORT.dir} : {k:k,dir:(k==="name"||k==="dtype"||k==="spec"||k==="score"||k==="avg"||k==="fulfil")?1:-1}; drawTable(); }); });
     drawTable();
   },
+  explain: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, S=UI.SRC, C=APP.CFG.DOCTOR;
+    var all=APP.doctors(c.D,c.s,c.e).filter(function(d){ return d.ranked && d.avg!=null && d.fulfil!=null && d.genuine!=null; }).sort(function(a,b){ return b.score-a.score; });
+    var d=all[0];
+    return {
+      steps:[
+        {t:"Four tiles at the top", see:"% of ranked doctors who are compliant, how many are on review, how many are on the watchlist, and how many doctors were audited.", mean:"A quick picture of the doctor panel&rsquo;s health.", look:"The review count: every doctor on review had at least one consult that failed with a critical error."},
+        {t:"How doctors are spread (bar chart)", see:"How many ranked doctors fall in each score band, from below 60 to 95&ndash;100. Green bars are 85+.", mean:"Most doctors should sit in the green bars on the right.", look:"A fat bar on the left (low scores), a sign that training is needed across the panel."},
+        {t:"Movers", see:"The doctors whose score improved or fell the most compared with the previous period.", mean:"Shows whose performance is changing. Hidden when the previous period&rsquo;s audit data is incomplete.", look:"Big fallers: worth a conversation before they reach the watchlist."},
+        {t:"01 &middot; Doctor table and filters", see:"Every doctor with audits, average audit score, critical errors, fulfilment, not-genuine cancellations, overall score, change and status. Filter by doctor type or status, search by name or specialty, and click a column title to sort.", mean:"The working list for medical leads. By default only doctors with at least "+C.minAudits+" scored audits are shown, so that one bad consult does not decide a ranking.", look:"Doctors tagged <b>Review</b> or <b>Watch</b>, and low fulfilment."}
+      ],
+      example: d ? '<p>Example: <b>'+esc(d.name)+'</b> in '+esc(c.p.label)+'.</p><div class="eq">'+Math.round(C.wAudit*100)+'% &times; audit '+f1(d.avg,1)+' + '+Math.round(C.wFulfil*100)+'% &times; fulfilment '+f1(d.fulfil,1)+' + '+Math.round(C.wCancel*100)+'% &times; genuine cancellations '+f1(d.genuine,1)+' = <b>'+f1(d.score,1)+'</b></div><p>'+fi(d.scored)+' scored audits, '+(d.zero||0)+' critical errors &rarr; status <b>'+(d.status==="ok"?"Compliant":d.status==="review"?"Review":d.status==="watch"?"Watch":"No score")+'</b>. If a doctor has no data for one part (for example no cancellation reviews), that part is left out and the other weights are scaled up.</p>' : '<p>No ranked doctor in this period has all three parts of the score.</p>',
+      terms:[
+        ["Doctor score","One compliance score per doctor.",Math.round(C.wAudit*100)+"% average audit score + "+Math.round(C.wFulfil*100)+"% fulfilment + "+Math.round(C.wCancel*100)+"% genuine-cancellation rate. Missing parts are left out and the rest scaled up.",S.audit+"; "+S.consult+"; "+S.cancel],
+        ["Audits","How many of the doctor&rsquo;s consults were scored in the period.","Count of scored audits by audit date.",S.audit],
+        ["Avg score","Average audit score of that doctor.","Sum of the doctor&rsquo;s audit scores &divide; scored audits.",S.audit],
+        ["Critical","Audits of this doctor that scored 0%.","Count of zero-score audits.",S.audit],
+        ["Fulfilment","Share of the doctor&rsquo;s booked consults that were completed.","Completed &divide; all consults for that doctor (D-1 rule).",S.consult],
+        ["Not-genuine cancels","How many reviewed PDS cancellations were not genuine.","Shown as &lsquo;not genuine / reviewed&rsquo;. Genuine rate = 100 &minus; not-genuine %.",S.cancel],
+        ["Ranked","Doctors with enough audits to be compared fairly.","At least "+C.minAudits+" scored audits in the period.",S.calc],
+        ["Compliant","Doing well.","Score "+C.compliant+" or more and no critical error.",S.calc],
+        ["Watch","Needs attention.","Ranked, no critical error, but score below "+C.compliant+".",S.calc],
+        ["Review","Needs a clinical review.","At least one critical-error audit in the period (shown even if not ranked).",S.calc],
+        ["Doctor type · specialty","How the doctor is engaged and their field.","As written in the audit sheet.",S.audit],
+        ["Why no tickets here?","Customer tickets do not record the doctor&rsquo;s name.","So tickets cannot be counted per doctor.",""]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Doctor score</h3><p>60% average audit score, 25% consult fulfilment (share of the doctor\'s consults that were completed) and 15% genuine cancellations. Compliant = score &ge; 85 and no critical error.</p><p class="why">One fair number per doctor for coaching and reviews.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Status tags</h3><p><span class="tag review">Review</span> at least one zero-score audit in the period; <span class="tag watch">Watch</span> score below 85; <span class="tag ok">Compliant</span> on track. Doctors with fewer than 3 audits are listed but not ranked.</p><p class="why">Medical leadership knows exactly who to talk to first.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Using the table</h3><p>Filter by doctor type or status, search by name or specialty, and click a column heading to sort. The default sort puts the lowest scores at the top.</p><p class="why">Find the doctors who need support in seconds.</p></div>'
 });
-
 </script>
 </body>
 </html>

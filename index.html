@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 UI.page({
   title: "Clinical Compliance · Penalty Score",
@@ -52,12 +52,41 @@ UI.page({
       UI.legend([["Weekly score","var(--accent)"],["Hollow = audit data incomplete","var(--surface)"]])+'</div>';
     return h;
   },
+  explain: function(c){
+    var M=c.M, D=M.ded, f1=UI.f1, esc=UI.esc, S=UI.SRC;
+    var NM={critical:"critical errors",high:"High tickets",medium:"Medium tickets",others:"other audit misses"};
+    var top=["critical","high","medium","others"].filter(function(k){ return D[k].pts!=null; }).sort(function(a,b){ return D[b].pts-D[a].pts; })[0];
+    return {
+      steps:[
+        {t:"The big score at the top", see:"A dial and the sentence <b>&ldquo;Apollo 24|7 scores &hellip; out of 100&rdquo;</b> for the period you picked, a coloured label, and the change from the comparison period.", mean:"100 would mean no problem was found in any audit or ticket. Every problem found takes points away, so the gap between the score and 100 is the room to improve.", look:"The colour: green (85+) = on track, amber (75&ndash;85) = watch, red (below 75) = action needed. A green &#9650; means the score went up."},
+        {t:"The coloured bar under the sentence", see:"A bar 100 points wide. The green part is the score kept; each red piece is the points lost to one kind of problem.", mean:"The whole score in one picture: what was kept and what was lost. The darker the red, the more serious the problem.", look:"The widest red piece, which is the problem costing the most. Hover a piece to see its exact value."},
+        {t:"01 &middot; Where the points are lost (four tiles)", see:"One tile per problem type, heaviest first: critical errors (&times;4), High tickets (&times;3), Medium tickets (&times;2), other audit misses (&times;1). Each tile shows the points lost, the rate behind it and the change.", mean:"Points lost = rate &times; weight. Serious problems have bigger weights, so one critical error costs more than one Medium ticket.", look:"The tile marked <b>Biggest gap</b>: fixing that problem raises the score fastest."},
+        {t:"02 &middot; Points lost to tickets, by business line", see:"A card each for Consult, Pharmacy and Diagnostics: ticket points lost, orders, High and Medium ticket counts and their rate per 1,000 orders. The small bar splits the loss into High (dark) and Medium (light).", mean:"Shows which business line&rsquo;s complaints pull the score down. The card with the red outline loses the most.", look:"A line whose small bar is mostly dark: its problem is serious (High) tickets rather than many small ones."},
+        {t:"03 &middot; Weekly score", see:"A line with one point per week since August, drawn over green / amber / red bands.", mean:"Shows whether the score is getting better or worse over time, not only this month.", look:"The direction of the line. Hollow points are weeks where audit data is incomplete, so read them with care. Hover a point for the exact value."}
+      ],
+      example:'<p>For <b>'+esc(c.p.label)+'</b> the score is worked out like this:</p>'+
+        '<div class="eq">100 &minus; (4 &times; '+f1(D.critical.rate,2)+'% critical errors) &minus; (3 &times; '+f1(D.high.rate,2)+' High per 1,000) &minus; (2 &times; '+f1(D.medium.rate,2)+' Medium per 1,000) &minus; (1 &times; '+f1(D.others.rate,2)+'% other misses)</div>'+
+        '<div class="eq">= 100 &minus; '+f1(D.critical.pts,2)+' &minus; '+f1(D.high.pts,2)+' &minus; '+f1(D.medium.pts,2)+' &minus; '+f1(D.others.pts,2)+' = <b>'+f1(M.penalty,1)+'</b></div>'+
+        '<p>In total <b>'+f1(D.total,1)+' points</b> are lost. The biggest loss is <b>'+(top?NM[top]+' (&minus;'+f1(D[top].pts,1)+')':'&mdash;')+'</b>, so that is where improvement pays off most.</p>',
+      terms:[
+        ["Penalty score","The single board number for clinical compliance.","100 &minus; all points lost (never below 0).",S.calc],
+        ["Critical-error rate","Share of scored audits that scored 0%.","Audits scoring 0 &divide; all scored audits &times; 100. Each 1% costs <b>4</b> points.",S.audit],
+        ["High tickets per 1,000 orders","How often serious complaints happen.","For each business line: High tickets &divide; orders &times; 1,000; then the average of the three lines. Each 1.0 costs <b>3</b> points.",S.tickets+"; "+S.orders],
+        ["Medium tickets per 1,000 orders","How often ordinary complaints happen.","Same as above for Medium tickets. Each 1.0 costs <b>2</b> points.",S.tickets+"; "+S.orders],
+        ["Other audit misses","Checklist points doctors miss in audits that did not fail outright.","100 &minus; average score of the audits that are not 0%. Example: average 92% &rarr; 8% missed &rarr; costs 8 points (<b>&times;1</b>).",S.audit],
+        ["Weight (&times;4, &times;3, &times;2, &times;1)","How heavily each problem type counts, most serious first.","Critical error 4, High ticket 3, Medium ticket 2, other misses 1. Set in the dashboard settings; can be changed.",""],
+        ["Points lost","How much of the 100 each problem type takes away.","Rate &times; weight.",S.calc],
+        ["Biggest gap","The problem type losing the most points in the period.","The tile with the highest points lost.",S.calc],
+        ["Ticket points lost (business line)","Points that one business line&rsquo;s tickets take off.","3 &times; High per 1,000 orders + 2 &times; Medium per 1,000 orders, for that line only.",S.tickets],
+        ["Weekly score","The same score for each Monday&ndash;Sunday week.","Same formula, one week at a time.",S.calc]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>The score</h3><p>Starts at <b>100</b> (no problems found) and loses points per problem: <b>4</b> per 1% of audits with a critical error, <b>3</b> per High ticket per 1,000 orders, <b>2</b> per Medium ticket per 1,000 orders, <b>1</b> per audit point missed on non-critical items.</p><p class="why">One number the board can follow month to month, with clear room to improve.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Bands</h3><div class="bands"><div><span class="rag green">&ge; 85</span><span>On track</span></div><div><span class="rag amber">75&ndash;85</span><span>Watch</span></div><div><span class="rag red">&lt; 75</span><span>Action needed</span></div></div><p class="why">Colour tells you at a glance whether action is needed.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Red pieces and tiles</h3><p>Each red piece of the bar, and each tile, is one problem type; the darker the red, the more serious. The tile marked <b>Biggest gap</b> is where most points are lost.</p><p class="why">Shows where to focus to raise the score fastest.</p></div>'
 });
-
 </script>
 </body>
 </html>

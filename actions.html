@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 UI.page({
   title: "Clinical Compliance · Action Tracker",
@@ -51,12 +51,35 @@ UI.page({
       (docs.length?docs.slice(0,40).map(function(d){ return '<tr><td><b>'+esc(d.name)+'</b><div style="font-size:10.5px;color:var(--ink-soft)">'+esc(d.dtype)+'</div></td><td><span class="tag '+d.status+'">'+(d.status==="review"?"Review":"Watch")+'</span></td><td class="num">'+fi(d.scored)+'</td><td class="num">'+(d.zero||0)+'</td><td class="num">'+f1(d.score)+'</td></tr>'; }).join(""):'<tr><td colspan="5" class="empty">No doctors on the watchlist.</td></tr>')+'</tbody></table></div><p class="desc" style="margin:8px 0 0">Full list and filters on <a href="doctors.html">Page 5 · Doctor League</a>.</p></div></div></div>';
     return h;
   },
+  explain: function(c){
+    var esc=UI.esc, S=UI.SRC, U=APP.util, now=c.D.through, SLA=APP.CFG.SLA, d3=U.addDaysIso(now,-3);
+    return {
+      steps:[
+        {t:"Four tiles at the top", see:"Overdue tickets now, critical audits to review, audit leads waiting more than 3 days, and % of tickets resolved within deadline.", mean:"The to-do list for the operations huddle in four numbers.", look:"Red tiles: overdue tickets and critical audits each need an owner."},
+        {t:"Which dates each part uses", see:"Tickets and audit leads are shown <b>as of the latest data day</b> ("+U.dateLabel(now)+"). Critical audits, the doctor watchlist and the &lsquo;resolved within deadline&rsquo; tile follow <b>the period you pick</b>.", mean:"Open work is always shown as it stands today, whatever period is selected.", look:"Change the period to review older critical audits."},
+        {t:"01 &middot; Pending tickets by age", see:"Open tickets per business line, split by how many days they have been open, with total and overdue counts. Counts in the 4+ day columns are red.", mean:"Shows where the backlog is and how old it is.", look:"Numbers in the older columns, which are patients waiting a long time."},
+        {t:"02 &middot; Oldest overdue tickets", see:"Ticket number, date raised, business line, category, severity and age. High tickets come first, then the oldest.", mean:"A ready-made chase list for the support team (60 most urgent shown).", look:"High-severity tickets at the top."},
+        {t:"03 &middot; Critical-error audits to review", see:"Every audit scoring 0 in the period: date, doctor, audit type and auditor.", mean:"Each one is a consult that failed a must-not-miss item and needs a clinical review with the doctor.", look:"The same doctor appearing more than once."},
+        {t:"04 &middot; Audit leads waiting", see:"Rows populated in the audit sheets in the last 30 days that have no audit yet, by audit type and age.", mean:"The pool of consults waiting to be audited. Not every lead is meant to be audited, so this is not missed work.", look:"A growing 8+ days column."},
+        {t:"05 &middot; Doctor watchlist", see:"Doctors on Review (critical error) or Watch (score below "+APP.CFG.DOCTOR.compliant+"), with audits, critical errors and score.", mean:"Doctors who need coaching or review. The full list is on page 5.", look:"Doctors on Review."}
+      ],
+      example:'<p>How &lsquo;overdue&rsquo; works, with the latest data day '+U.dateLabel(now)+':</p><div class="eq">High ticket raised '+U.shortDate(d3)+', still pending &rarr; 3 days = 72 h &gt; '+SLA.High.res+' h deadline &rarr; <b>overdue</b></div><div class="eq">Medium ticket raised '+U.shortDate(d3)+', still pending &rarr; 72 h, deadline '+SLA.Medium.res+' h &rarr; <b>'+(72>SLA.Medium.res?"overdue":"not yet overdue")+'</b></div>',
+      terms:[
+        ["Overdue ticket","A ticket still open after its resolution deadline.","Days open &times; 24 &gt; deadline (High "+SLA.High.res+" h, Medium "+SLA.Medium.res+" h), counted up to the latest data day.",S.tickets],
+        ["Age (days)","How long the ticket has been open.","Latest data day &minus; date the ticket was raised.",S.tickets],
+        ["Critical audit to review","An audit that scored 0% in the period.","Audits with score 0 and an audit date in the period.",S.audit],
+        ["Audit lead","A consult copied into an audit sheet for possible audit.","Row with an appointment date in the last 30 days and no audit date yet. Age = days since the appointment.",S.audit],
+        ["Leads not audited &gt; 3 days","Leads waiting longer than 3 days.","Count of leads older than 3 days.",S.calc],
+        ["Resolved within deadline","Share of closed tickets solved in time in the period.","Closed tickets within deadline &divide; closed tickets with a resolution time.",S.tickets],
+        ["Doctor watchlist","Doctors needing attention.","Review = any critical error; Watch = ranked doctor scoring below "+APP.CFG.DOCTOR.compliant+".",S.audit+"; "+S.consult+"; "+S.cancel]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>What counts as an action</h3><p>Tickets still pending after their deadline, zero-score audits that need a clinical review, audit leads waiting more than 3 days, and doctors on review or watch.</p><p class="why">Keeps the daily huddle focused on what can be fixed today.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Ageing tables</h3><p>Pending tickets and un-audited leads split by how many days they have waited. Red numbers are the older buckets that need chasing first.</p><p class="why">Old items are the ones patients and regulators notice.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Deadlines</h3><p>High tickets: answer within 2 h and resolve within 24 h. Medium: 4 h and 72 h. These are starting values and can be changed to your agreed service levels.</p><p class="why">Overdue counts are only as good as the agreed deadlines.</p></div>'
 });
-
 </script>
 </body>
 </html>

@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 UI.page({
   title: "Clinical Compliance · KPI Targets",
@@ -39,12 +39,46 @@ UI.page({
     h+='</tbody></table></div><p class="cfg-note">Targets are starting suggestions based on today\'s data and common practice. Amber = within 10% of target. Tell me your official targets and I will update them in one place.</p></div>';
     return h;
   },
+  explain: function(c){
+    var f1=UI.f1, esc=UI.esc, S=UI.SRC, ST=c.M.kpiStatus;
+    var DEF={
+      auditScore:["Average audit score across all scored audits.","Sum of audit scores &divide; number of scored audits.",S.audit],
+      passPct:["Share of audits that scored 90% or more (a &lsquo;good&rsquo; consult).","Audits &ge; 90% &divide; scored audits &times; 100.",S.audit],
+      criticalPct:["Share of audits that failed with a critical error (score 0).","Audits scoring 0 &divide; scored audits &times; 100.",S.audit],
+      highPer1k:["Serious complaints for every 1,000 orders.","High tickets &divide; orders &times; 1,000 per business line, averaged over the three lines.",S.tickets+"; "+S.orders],
+      mediumPer1k:["Ordinary complaints for every 1,000 orders.","Medium tickets &divide; orders &times; 1,000 per business line, averaged over the three lines.",S.tickets+"; "+S.orders],
+      fulfilPct:["Share of booked consults that actually happened.","Completed consults &divide; all consults, D-1 rule.",S.consult],
+      notGenuinePct:["Share of reviewed PDS cancellations with a reason that was not genuine.","&lsquo;No&rsquo; reviews &divide; Yes + No reviews &times; 100.",S.cancel],
+      frtSlaPct:["Share of tickets that got a first reply within the deadline.","Tickets answered within "+APP.CFG.SLA.High.frt+" h (High) / "+APP.CFG.SLA.Medium.frt+" h (Medium) &divide; tickets with a response time.",S.tickets],
+      resSlaPct:["Share of closed tickets that were solved within the deadline.","Closed tickets resolved within "+APP.CFG.SLA.High.res+" h (High) / "+APP.CFG.SLA.Medium.res+" h (Medium) &divide; closed tickets with a resolution time.",S.tickets],
+      agedPct:["Share of tickets raised in the period that are still open past their deadline.","Overdue pending tickets &divide; all tickets raised in the period &times; 100.",S.tickets],
+      coverage:["How much of the consult volume was audited.","Audits &divide; consults &times; 100, D-1 rule.",S.audit+"; "+S.consult],
+      leadDonePct:["Share of consults put on the audit sheets that were audited.","Audited rows &divide; populated rows for the period (D-1).",S.audit]
+    };
+    var pick=ST.filter(function(x){ return x.st==="amber"; })[0]||ST.filter(function(x){ return x.st==="red"; })[0]||ST[0];
+    var d=pick.def, dec=(d.unit==="%"&&d.target>=2)?1:2, lim=d.dir==="min"?d.target*0.9:d.target*1.1;
+    var stTxt={green:"On target",amber:"Close",red:"Missed",none:"No data"};
+    return {
+      steps:[
+        {t:"The big number at the top", see:"How many of the 12 KPIs met their target, e.g. <b>5/12</b>, with counts of green, amber and red and last period&rsquo;s result.", mean:"A quick report card: how many promises were kept this period.", look:"Whether the number of greens is going up month by month."},
+        {t:"The green / amber / red bar", see:"The same counts drawn as a bar.", mean:"The bigger the green part, the more targets were met.", look:"A large red part means many KPIs need an action plan."},
+        {t:"01 &middot; All KPIs, by pillar (table)", see:"Each KPI with its <b>actual</b> value, its <b>target</b>, a status pill, the change and a small line by month. KPIs are grouped under the five pillars.", mean:"&ldquo;&ge;&rdquo; means the value should be at least the target; &ldquo;&le;&rdquo; means at most. Close = within 10% of the target.", look:"Red pills first, then amber ones whose small line is heading the wrong way."},
+        {t:"Small monthly line", see:"A tiny chart from August to now for each KPI.", mean:"Shows the direction: is the KPI improving or getting worse?", look:"A red KPI with an improving line is less worrying than an amber one that is falling."},
+        {t:"Note under the table", see:"How targets were set.", mean:"Targets are starting suggestions; they should be replaced by Apollo&rsquo;s official targets.", look:"Any target that looks too easy or too hard for your business."}
+      ],
+      example:'<p>Take <b>'+esc(d.label)+'</b> for '+esc(c.p.label)+':</p><div class="eq">Actual '+f1(pick.v,dec)+d.unit+' &nbsp;&middot;&nbsp; target '+(d.dir==="min"?"at least ":"at most ")+d.target+d.unit+' &nbsp;&middot;&nbsp; &ldquo;close&rdquo; band '+(d.dir==="min"?"from "+f1(lim,2)+d.unit+" up to the target":"from the target up to "+f1(lim,2)+d.unit)+'</div>'+
+        '<p>So the status is <b>'+stTxt[pick.st]+'</b>. Green needs the actual to reach the target; amber means it missed by no more than 10%; red means it missed by more.</p>',
+      terms:[["Target","The value the KPI should reach.","Set in the dashboard settings; starting suggestions until official targets are given.",""],
+             ["On target / Close / Missed","The traffic light for each KPI.","On target = met. Close = within 10% of the target. Missed = more than 10% away.",S.calc],
+             ["vs previous","Change from the comparison period.","This period&rsquo;s value &minus; comparison value (green if better).",S.calc]]
+        .concat(APP.CFG.KPIS.map(function(k){ var x=DEF[k.k]||["","",""]; return [esc(k.label)+' <span style="font-weight:400;color:var(--ink-soft)">('+(k.dir==="min"?"&ge; ":"&le; ")+k.target+k.unit+')</span>', x[0], x[1], x[2]]; }))
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Traffic lights</h3><p><span class="pill-st green">On target</span> met the target; <span class="pill-st amber">Close</span> within 10% of it; <span class="pill-st red">Missed</span> more than 10% away. "&ge;" means at least, "&le;" means at most.</p><p class="why">Board members see immediately which promises were kept.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>The 12 KPIs</h3><p>Grouped by pillar: clinical quality (audit score, % audits &ge; 90%), safety (critical errors, High tickets), experience (Medium tickets, fulfilment, genuine cancellations), responsiveness (answered and resolved within deadline, overdue pending) and governance (audit coverage, leads completed).</p><p class="why">Each KPI can be given an owner and a monthly target.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Trend line</h3><p>The small line shows each KPI month by month (August onward), so you can see if a red KPI is improving or getting worse.</p><p class="why">Direction matters as much as today\'s colour.</p></div>'
 });
-
 </script>
 </body>
 </html>

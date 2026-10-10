@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 var LIK=[{n:"Rare",max:1},{n:"Unlikely",max:5},{n:"Possible",max:20},{n:"Likely",max:50},{n:"Frequent",max:Infinity}];
 var SEV={Critical:5, High:4, Medium:2};
@@ -57,12 +57,32 @@ UI.page({
     h+='</tbody></table></div></div>';
     return h;
   },
+  explain: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, S=UI.SRC, list=items(c.M), x=list[0];
+    return {
+      steps:[
+        {t:"Four summary tiles", see:"How many issue types are extreme, high or lower risk, and how many critical audit errors there were.", mean:"A count of where the risks sit. Each &lsquo;issue type&rsquo; is one ticket category (e.g. &lsquo;Received wrong items&rsquo;) or critical audit errors.", look:"The number of extreme risks. Ideally it falls to zero."},
+        {t:"01 &middot; Risk matrix (the grid)", see:"Rows are <b>how serious</b> (Critical, High, Medium). Columns are <b>how often</b> it happens per 10,000 orders, from Rare to Frequent. Each cell shows how many issues sit there and names the first two.", mean:"Top-right cells (serious and frequent) are the biggest patient-safety risks. Bottom-left cells are minor and rare.", look:"Red cells with numbers in them. Hover a cell to see every issue inside it."},
+        {t:"Cell colours", see:"Red, amber or green background with an &lsquo;index&rsquo; number in each cell.", mean:"Index = severity score &times; likelihood level. 15 or more is extreme (red), 8&ndash;14 high (amber), below 8 lower (green).", look:"Issues moving right from one month to the next, an early warning that they are becoming more frequent."},
+        {t:"02 &middot; Top risks (table)", see:"Every issue ranked by risk index, with count, rate per 10,000, likelihood level and the change in rate.", mean:"Your prioritised list. The top rows need an owner and a root-cause review this month.", look:"Rows with a red index whose rate is going up (red &#9650;)."}
+      ],
+      example: x ? '<p>Top risk in '+esc(c.p.label)+': <b>'+esc(x.name)+'</b> ('+esc(x.bu)+').</p><div class="eq">'+fi(x.n)+' cases &rarr; '+f1(x.rate,2)+' '+esc(x.base)+' &rarr; likelihood <b>'+(LIK[x.lik-1]?LIK[x.lik-1].n:"&mdash;")+'</b> = '+x.lik+'</div><div class="eq">Severity '+x.sev+' = '+SEV[x.sev]+' &nbsp;&times;&nbsp; likelihood '+x.lik+' = risk index <b>'+x.ix+'</b> ('+(x.zone==="red"?"extreme":x.zone==="amber"?"high":"lower")+')</div>' : '',
+      terms:[
+        ["Issue type","One kind of problem.","Each ticket category in each business line, plus &lsquo;critical audit error&rsquo;.",S.tickets+"; "+S.audit],
+        ["Severity score","How serious the issue is.","Critical audit error = 5, High ticket category = 4, Medium ticket category = 2.",""],
+        ["Rate per 10,000","How often the issue happens.","Count &divide; orders of that business line &times; 10,000 (for critical errors: &divide; scored audits &times; 10,000).",S.tickets+"; "+S.orders],
+        ["Likelihood level","The rate turned into a 1&ndash;5 scale.","Rare (below 1) = 1, Unlikely (1&ndash;5) = 2, Possible (5&ndash;20) = 3, Likely (20&ndash;50) = 4, Frequent (50 or more per 10,000) = 5.",S.calc],
+        ["Risk index","One number that combines how serious and how often.","Severity score &times; likelihood level, from 2 up to 25.",S.calc],
+        ["Extreme / High / Lower","Risk zones.","Index 15 or more = extreme (red); 8&ndash;14 = high (amber); below 8 = lower (green).",S.calc],
+        ["Rate vs prev","Whether the issue is happening more or less often than in the comparison period.","This period&rsquo;s rate &minus; previous rate (red &#9650; = more often).",S.calc]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>The grid</h3><p>Rows = how serious (Critical, High, Medium). Columns = how often, per 10,000 orders (or audits). Each issue sits in one cell; red cells are the extreme risks.</p><p class="why">Standard way quality committees prioritise patient-safety work.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Risk index</h3><p>Severity score × likelihood level, from 1 to 25. 15 or more = extreme, 8–14 = high, below 8 = lower. The table ranks every issue by this index.</p><p class="why">Puts a frequent-but-mild issue and a rare-but-serious one on the same scale.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>What to do</h3><p>Red: root-cause review and an owner this month. Amber: monitor and set a reduction target. Green: keep watching. A risk moving right (more frequent) is an early warning.</p><p class="why">Turns data into a short, prioritised action list.</p></div>'
 });
-
 </script>
 </body>
 </html>

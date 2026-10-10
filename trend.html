@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 UI.page({
   title: "Clinical Compliance · Trend & Control",
@@ -55,12 +55,44 @@ UI.page({
       W.map(function(x,i){ var m=x.m; return '<tr><td>'+labels[i]+(inc[i]?' <span class="tag">audit partial</span>':'')+'</td><td class="num"><b>'+f1(m.penalty)+'</b></td><td class="num">'+f1(m.pillars.overall)+'</td><td class="num">'+f1(m.audit.score)+'%</td><td class="num">'+f1(m.audit.criticalPct,2)+'</td><td class="num">'+f1(m.tickets.highPer1k,2)+'</td><td class="num">'+f1(m.tickets.medPer1k,2)+'</td><td class="num">'+f1(idx[i],0)+'</td><td class="num">'+f1(m.tickets.frtSlaPct)+'%</td></tr>'; }).reverse().join("")+'</tbody></table></div></div>';
     return h;
   },
+  explain: function(c){
+    var D=c.D, f1=UI.f1, esc=UI.esc, S=UI.SRC, U=APP.util, F=APP.CFG.FIRST_MONTH+"-01";
+    var byDay={}; D.orders.forEach(function(o){ if(o.date<F||o.date>D.through) return; (byDay[o.date]=byDay[o.date]||{o:0,p:0}).o+=o.orders; });
+    D.tickets.forEach(function(t){ var r=byDay[t.date]; if(r) r.p+=t.sev==="High"?3:2; });
+    var dv=Object.keys(byDay).filter(function(d){ return d<D.through; }).map(function(d){ var r=byDay[d]; return r.o?r.p/r.o*1000:null; }).filter(function(v){ return v!=null; });
+    var mean=dv.reduce(function(a,b){ return a+b; },0)/(dv.length||1), sd=Math.sqrt(dv.reduce(function(a,b){ return a+(b-mean)*(b-mean); },0)/(dv.length||1));
+    var wk=APP.weeks(F,D.through), last=wk[wk.length-1], lm=APP.metrics(D,last.start,last.end), aug=APP.metrics(D,F,U.addDaysIso(F,30));
+    var base=aug.tickets.highPer1k*3+aug.tickets.medPer1k*2, lv=(lm.tickets.highPer1k||0)*3+(lm.tickets.medPer1k||0)*2;
+    return {
+      steps:[
+        {t:"Four tiles at the top", see:"The ticket index for the latest week, the number of unusual days, the normal daily range and the latest weekly penalty score.", mean:"A quick health check: are complaints better than August, and did anything unusual happen?", look:"A ticket index above 100 (worse than August) or unusual days greater than 0."},
+        {t:"01 &middot; Weekly scores", see:"Two lines per week: the penalty score (page 1) and the five-pillar score (page 2), over green / amber / red bands.", mean:"Shows the direction of both board scores over time.", look:"Lines moving down into amber or red. Dashed / hollow parts are weeks where audit data is incomplete."},
+        {t:"02 &middot; Control chart (daily dots)", see:"One dot per day for ticket points per 1,000 orders, with a grey average line and red dashed upper and lower limits.", mean:"Days naturally go up and down. Only a dot <b>outside</b> the limits (shown red) is unusual enough to investigate.", look:"Red dots, or 7 or more dots in a row on the same side of the average, which signals a real shift."},
+        {t:"03 &middot; Critical-error rate by week", see:"% of audits scoring 0 each complete week, with its average and limit.", mean:"Shows whether critical errors are becoming more common.", look:"Any week above the dashed limit."},
+        {t:"04 &middot; Ticket index vs August", see:"Each week&rsquo;s weighted ticket rate compared with August, where August = 100.", mean:"Below 100 = fewer serious complaints per order than in August (better); above 100 = worse.", look:"A line that stays below 100."},
+        {t:"05 &middot; Week-by-week table", see:"All weekly numbers in one table, newest week first.", mean:"Use it to read exact values or copy them into a report.", look:"Weeks tagged &lsquo;audit partial&rsquo;, whose audit numbers are incomplete."}
+      ],
+      example:'<p><b>Normal range:</b> over the last '+dv.length+' days the daily average is '+f1(mean,2)+' ticket points per 1,000 orders, and days typically vary by '+f1(sd,2)+' (the standard deviation).</p>'+
+        '<div class="eq">Upper limit = '+f1(mean,2)+' + 3 &times; '+f1(sd,2)+' = <b>'+f1(mean+3*sd,1)+'</b> &nbsp;&middot;&nbsp; lower limit = '+f1(mean,2)+' &minus; 3 &times; '+f1(sd,2)+' = <b>'+f1(Math.max(0,mean-3*sd),1)+'</b></div>'+
+        '<p><b>Ticket index</b> for the week of '+U.shortDate(last.start)+':</p><div class="eq">(3 &times; '+f1(lm.tickets.highPer1k,2)+' + 2 &times; '+f1(lm.tickets.medPer1k,2)+') &divide; August (3 &times; '+f1(aug.tickets.highPer1k,2)+' + 2 &times; '+f1(aug.tickets.medPer1k,2)+') &times; 100 = <b>'+f1(base?lv/base*100:null,0)+'</b></div>',
+      terms:[
+        ["Week","Monday to Sunday.","The first and last weeks may be shorter.",""],
+        ["Control chart","A chart that separates normal ups and downs from real problems.","Average line plus upper and lower limits.",S.calc],
+        ["Average","The usual daily level.","Sum of the daily values &divide; number of days.",S.calc],
+        ["Standard deviation","How much days normally differ from the average.","Statistical spread of the daily values.",S.calc],
+        ["Upper / lower limit","The edges of the normal range.","Average &plusmn; 3 standard deviations. Values outside happen by chance less than 1 time in 300.",S.calc],
+        ["Unusual day","A day worth investigating.","A day whose value is outside the limits (red dot).",S.calc],
+        ["Daily ticket points per 1,000 orders","The daily complaint level weighted by seriousness.","(3 &times; High + 2 &times; Medium tickets) &divide; all orders &times; 1,000, all business lines together. The latest day is left out because its tickets are still coming in.",S.tickets+"; "+S.orders],
+        ["Ticket index","Complaint level compared with August.","(3 &times; High per 1,000 + 2 &times; Medium per 1,000) for the week &divide; the same for August &times; 100. August = 100; lower is better.",S.calc],
+        ["Critical-error rate","Share of audits that scored 0.","Zero-score audits &divide; scored audits &times; 100, complete weeks only.",S.audit]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Trend lines</h3><p>Weekly penalty score (page 1) and five-pillar score (page 2). Hollow points are weeks where the audit sheets no longer hold all audits.</p><p class="why">Shows direction, not just a single month.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Control charts</h3><p>The grey line is the average; the red dashed lines are the normal limits (average ± 3 standard deviations). Points outside them are red and unlikely to be chance.</p><p class="why">Stops over-reacting to normal ups and downs, and catches real spikes early.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Index</h3><p>August = 100. A ticket index of 90 means 10% fewer weighted tickets per order than August.</p><p class="why">One simple way to show the board the effect of improvement work.</p></div>'
 });
-
 </script>
 </body>
 </html>

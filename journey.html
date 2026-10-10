@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 function stages(M){
   var T=M.tickets, L={}; T.lines.forEach(function(b){ L[b.key]=b; });
@@ -53,12 +53,36 @@ UI.page({
     h+='</div>';
     return h;
   },
+  explain: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, S=UI.SRC, ST=stages(c.M), L={}; c.M.tickets.lines.forEach(function(b){ L[b.key]=b; });
+    var ph=L.pharma, phv=ST.filter(function(x){ return x.k==="pharmacy"; })[0], vals=ST.filter(function(x){ return x.v!=null; });
+    var avg=vals.length?vals.reduce(function(a,x){ return a+x.v; },0)/vals.length:null;
+    return {
+      steps:[
+        {t:"The journey average at the top", see:"A dial with the average of the six steps and the name of the weakest link.", mean:"How well Apollo 24|7 looks after a patient across the whole journey, not just one department.", look:"The <b>weakest link</b>: the step where patients most often have a bad experience."},
+        {t:"01 &middot; Step by step (six cards)", see:"Consultation &rarr; Prescription &rarr; Doctor follow-up &rarr; Pharmacy delivery &rarr; Diagnostics &rarr; Resolution, each with a 0&ndash;100 score, colour and change.", mean:"Read it left to right like a patient&rsquo;s path. The card outlined in red is the weakest step.", look:"Amber or red cards, and steps whose score fell since the comparison period."},
+        {t:"02 &middot; What happens at each step (tables)", see:"For each step, the ticket categories that belong to it with severity, number of tickets, rate per 1,000 orders and how many are still pending.", mean:"The exact complaints that pull each step down.", look:"High-severity rows and rows with many pending tickets."},
+        {t:"Consultation &amp; resolution panel", see:"Audit score, critical errors, fulfilment, and ticket answer / resolve rates.", mean:"These two steps are measured from audits and ticket handling instead of ticket categories.", look:"A low &lsquo;resolved within deadline&rsquo;, which pulls down the Resolution step."}
+      ],
+      example: (ph&&phv&&ph.orders) ? '<p>Example: <b>Pharmacy delivery</b> in '+esc(c.p.label)+'.</p><div class="eq">Ticket points = 3 &times; '+fi(ph.high)+' High + 2 &times; '+fi(ph.medium)+' Medium = '+fi(3*ph.high+2*ph.medium)+'</div><div class="eq">100 &minus; '+fi(3*ph.high+2*ph.medium)+' &divide; '+fi(ph.orders)+' orders &times; 1,000 = <b>'+f1(phv.v,1)+'</b></div><p>The journey average is the simple average of the six steps: <b>'+f1(avg,1)+'</b>.</p>' : '',
+      terms:[
+        ["Consultation","Quality of the consultation itself.","Average audit score.",S.audit],
+        ["Prescription","Problems with prescriptions after a consult.","100 &minus; (3 &times; High + 2 &times; Medium prescription tickets) &divide; consult orders &times; 1,000. Consult categories that mention &lsquo;prescription&rsquo;.",S.tickets+"; "+S.orders],
+        ["Doctor follow-up","Other consult complaints: doctor replies, behaviour, charging.","Same formula with all other Consult ticket categories.",S.tickets+"; "+S.orders],
+        ["Pharmacy delivery","Problems with medicine orders: wrong, missing, expired or damaged items.","Same formula with all Medicine tickets &divide; pharmacy orders.",S.tickets+"; "+S.orders],
+        ["Diagnostics","Problems with lab tests: sampling and reports.","Same formula with all Diagnostics tickets &divide; diagnostic orders.",S.tickets+"; "+S.orders],
+        ["Resolution","How well complaints are handled once raised.","Average of % answered within deadline and % resolved within deadline.",S.tickets],
+        ["Journey average","Overall journey score.","Simple average of the six step scores.",S.calc],
+        ["Weakest link","The step with the lowest score.","Lowest of the six.",S.calc],
+        ["Pending","Tickets in that category still open.","Count with status pending or open.",S.tickets]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Six steps</h3><p>Consultation (audit quality) &rarr; Prescription (prescription tickets) &rarr; Doctor follow-up (reply, complaint, behaviour tickets) &rarr; Pharmacy delivery &rarr; Diagnostics &rarr; Resolution (tickets handled within deadline).</p><p class="why">Shows compliance the way a patient experiences it.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Step scores</h3><p>Ticket steps: 100 minus (3 per High + 2 per Medium ticket) per 1,000 orders of that business line. Consultation uses the average audit score; Resolution the share of tickets handled within deadline.</p><p class="why">Every step on the same 0–100 scale, so they can be compared.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Weakest link</h3><p>The step with the lowest score is outlined in red. Improving it raises the journey average the most.</p><p class="why">A chain is only as strong as its weakest link.</p></div>'
 });
-
 </script>
 </body>
 </html>

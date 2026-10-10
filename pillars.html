@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 function radar(vals, prev, labels){
   var cx=200, cy=180, R=130, n=vals.length, s='<svg class="radar" viewBox="-70 0 540 360" role="img" aria-label="Five pillar radar">';
@@ -57,12 +57,43 @@ UI.page({
     h+='</div><p class="cfg-note">Settings: pillar weights '+Object.keys(W).map(function(k){ return k+' '+W[k]+'%'; }).join(', ')+'. Ticket deadlines: High answered within '+S.High.frt+' h and resolved within '+S.High.res+' h; Medium within '+S.Medium.frt+' h and '+S.Medium.res+' h. Tell me if you want different values.</p>';
     return h.replace('repeat(5,minmax(0,1fr))','repeat(auto-fit,minmax(200px,1fr))');
   },
+  explain: function(c){
+    var P=c.M.pillars, W=APP.CFG.PILLAR_WEIGHTS, f1=UI.f1, esc=UI.esc, S=UI.SRC, A=c.M.audit, T=c.M.tickets, M=c.M;
+    var NM={quality:"Clinical quality",safety:"Patient safety",experience:"Patient experience",responsiveness:"Responsiveness",governance:"Governance"};
+    var ks=Object.keys(W).filter(function(k){ return P[k]!=null; }), ws=ks.reduce(function(a,k){ return a+W[k]; },0);
+    return {
+      steps:[
+        {t:"The overall score at the top", see:"A dial with the overall five-pillar score out of 100, its colour, the change, the weakest pillar and the weights.", mean:"One number that balances five different sides of compliance. A weak pillar cannot hide behind strong audit scores.", look:"The <b>weakest pillar</b> named under the score: that is the area to work on first."},
+        {t:"Pillar radar (the five-sided shape)", see:"Each corner is one pillar. The coloured shape is this period; the grey dashed outline is the comparison period; the green dashed ring is the on-track level (85).", mean:"The further out a corner, the better that pillar. A perfect score would fill the whole pentagon.", look:"A corner that is pulled in towards the centre, or that sits inside the green ring: that pillar is below on-track."},
+        {t:"Score build-up (table)", see:"Each pillar&rsquo;s score, its weight and its contribution to the overall score, plus the change.", mean:"Contribution = score &times; weight. Adding the contributions gives the overall score.", look:"A pillar with a high weight and a low score, because it drags the overall score down the most."},
+        {t:"01 &middot; What is inside each pillar (cards)", see:"One card per pillar with its score, the real numbers that feed it and the formula in small print.", mean:"Lets you trace any pillar score back to the actual audit and ticket numbers.", look:"Which ingredient is weak, for example &lsquo;resolved in time&rsquo; inside Responsiveness."},
+        {t:"Settings line", see:"The weights and ticket deadlines used on this page.", mean:"These are starting values chosen for the dashboard; they can be changed to Apollo&rsquo;s official values.", look:"Whether the deadlines match your service-level agreements."}
+      ],
+      example:'<p>For <b>'+esc(c.p.label)+'</b>, each pillar score is multiplied by its weight and the results are added:</p><div class="eq">'+
+        ks.map(function(k){ return f1(P[k],1)+' &times; '+W[k]+'%'; }).join(' + ')+(ws!==100?' &nbsp;(&divide; '+ws+'% of weights with data)':'')+' = <b>'+f1(P.overall,1)+'</b></div>'+
+        '<p>Example inside a pillar: <b>Responsiveness</b> = (tickets answered in time '+f1(T.frtSlaPct,1)+'% + tickets resolved in time '+f1(T.resSlaPct,1)+'%) &divide; 2 = <b>'+f1(P.responsiveness,1)+'</b>.</p>',
+      terms:[
+        ["Clinical quality","How good the consultations are, judged by auditors.","Average audit score of all scored audits.",S.audit],
+        ["Patient safety","How often things happen that could harm a patient.","100 &minus; 4 &times; critical-error % &minus; 3 &times; High tickets per 1,000 orders.",S.audit+"; "+S.tickets],
+        ["Patient experience","How smooth the service felt to the patient.","Average of three parts: (100 &minus; 2 &times; Medium tickets per 1,000 orders), consult fulfilment %, and (100 &minus; not-genuine cancellation %).",S.tickets+"; "+S.consult+"; "+S.cancel],
+        ["Responsiveness","How quickly complaints are handled.","Average of: % of tickets first answered within deadline and % of tickets resolved within deadline.",S.tickets],
+        ["Governance","Whether the checking process itself is done properly.","Average of: audit coverage compared with the "+APP.CFG.COVERAGE_TARGET+"% target (capped at 100) and % of audit leads completed.",S.audit+"; "+S.consult],
+        ["Weight","How much each pillar counts in the overall score.","Safety 30%, Quality 25%, Experience 20%, Responsiveness 15%, Governance 10%. If a pillar has no data it is left out and the others are scaled up.",""],
+        ["Contribution","The part of the overall score a pillar brings.","Pillar score &times; weight &divide; 100.",S.calc],
+        ["Overall score","The balanced five-pillar score.","Sum of the contributions.",S.calc],
+        ["Consult fulfilment","Share of booked consults that were actually completed.","Completed consults &divide; all consults (PDS, PDS Mounjaro, Non Pharma, GLP), using the D-1 rule.",S.consult],
+        ["Not-genuine cancellation %","Share of reviewed PDS cancellations where the reason was not genuine.","Reviews marked &lsquo;No&rsquo; for genuine &divide; reviews marked Yes or No.",S.cancel],
+        ["Audit coverage","How much of the consult volume was audited.","Audits (including cancellation reviews) &divide; consults &times; 100, using the D-1 rule. Target "+APP.CFG.COVERAGE_TARGET+"%.",S.audit+"; "+S.consult],
+        ["Audit leads completed","Share of consults put on the audit sheets that were actually audited.","Rows with an appointment in the period (D-1) that have an audit date &divide; all such rows.",S.audit],
+        ["Weakest pillar","The pillar with the lowest score.","Lowest of the five pillar scores.",S.calc]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Five pillars</h3><p><b>Clinical quality</b> (how good consultations are), <b>Patient safety</b> (critical errors and High tickets), <b>Patient experience</b> (Medium tickets, completed consults, genuine cancellations), <b>Responsiveness</b> (tickets handled within deadline) and <b>Governance</b> (enough audits done, leads cleared).</p><p class="why">Covers every aspect of compliance, not only audit scores.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>The radar</h3><p>Each corner is a pillar; the further out, the better. The shaded shape is this period, the grey outline the previous one, and the green ring is the on-track level.</p><p class="why">A dent in the shape shows the pillar that needs work.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Weights</h3><p>Patient safety weighs most (30%), then clinical quality (25%), experience (20%), responsiveness (15%) and governance (10%). The overall score is the weighted average.</p><p class="why">Weights reflect what matters most to patients; they can be changed.</p></div>'
 });
-
 </script>
 </body>
 </html>

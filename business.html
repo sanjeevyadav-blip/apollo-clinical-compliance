@@ -8,11 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=2"></script>
-<script src="assets/ui.js?v=2"></script>
+<script src="assets/core.js?v=3"></script>
+<script src="assets/ui.js?v=3"></script>
 <script>
 function buScores(M){
   return M.tickets.lines.map(function(b){
@@ -51,12 +51,36 @@ UI.page({
       '<p class="cfg-note">Owners are placeholders. Send me each head\'s name and I will add it. Deadlines: High answered within '+APP.CFG.SLA.High.frt+' h / resolved within '+APP.CFG.SLA.High.res+' h; Medium '+APP.CFG.SLA.Medium.frt+' h / '+APP.CFG.SLA.Medium.res+' h.</p></div>';
     return h;
   },
+  explain: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, S=UI.SRC, SC=buScores(c.M), lo=SC.slice().sort(function(a,b){ return a.score-b.score; })[0], b=lo?lo.b:null;
+    var grp=SC.filter(function(x){ return x.score!=null; });
+    var parts=[]; if(b){ if(b.key==="consult"&&c.M.audit.score!=null) parts.push(["audit score",c.M.audit.score]); if(b.ptsLost!=null) parts.push(["ticket quality (100 &minus; "+f1(b.ptsLost,1)+")",Math.max(0,100-b.ptsLost)]); if(lo.resp!=null) parts.push(["responsiveness",lo.resp]); }
+    return {
+      steps:[
+        {t:"The group score at the top", see:"The average of the three business-line scores and the name of the lowest line.", mean:"How the three businesses do together, with each line counting equally.", look:"The <b>lowest</b> line named next to the score."},
+        {t:"01 &middot; Scorecards (one per line)", see:"For Consult, Pharmacy and Diagnostics: score and colour, owner, change, a small line of weekly ticket points lost, orders, High and Medium tickets, answered / resolved in time, pending and overdue, and the top five issues.", mean:"Each business head can see their own number and what drives it.", look:"A rising weekly line (more points lost) and High issues in the top five."},
+        {t:"02 &middot; Side by side (table)", see:"The same measures for the three lines in columns, including average first response and resolution hours.", mean:"Compare the lines on any one measure.", look:"The line with the most overdue pending tickets or the slowest resolution."},
+        {t:"Note", see:"Owners (placeholders) and ticket deadlines.", mean:"Owner names can be filled in so each scorecard has a named person.", look:"Send the owners&rsquo; names to complete the scorecards."}
+      ],
+      example: b ? '<p>Lowest line in '+esc(c.p.label)+': <b>'+esc(b.label)+'</b>.</p><div class="eq">('+parts.map(function(p){ return p[0]+' '+f1(p[1],1); }).join(' + ')+') &divide; '+parts.length+' = <b>'+f1(lo.score,1)+'</b></div><p>Responsiveness = (answered in time '+f1(b.frtSlaPct,1)+'% + resolved in time '+f1(b.resSlaPct,1)+'%) &divide; 2. The group score is the average of the '+grp.length+' line scores.</p>' : '',
+      terms:[
+        ["Line score","One compliance score per business line.","Average of: ticket quality (100 &minus; ticket points lost) and responsiveness; Consult also includes the average audit score.",S.calc],
+        ["Group score","All three lines together.","Simple average of the three line scores.",S.calc],
+        ["Ticket points lost","How much the line&rsquo;s complaints cost.","3 &times; High per 1,000 orders + 2 &times; Medium per 1,000 orders.",S.tickets+"; "+S.orders],
+        ["Responsiveness","How fast the line&rsquo;s complaints are handled.","Average of % answered within deadline and % resolved within deadline.",S.tickets],
+        ["Avg first response (hrs)","Typical time to first reply.","Average first-response hours of the line&rsquo;s tickets.",S.tickets],
+        ["Avg resolution (hrs)","Typical time to close a ticket.","Average resolution hours of closed tickets.",S.tickets],
+        ["Pending · overdue","Open tickets, and open tickets past their deadline.","Counted for tickets raised in the period, as of the latest data day.",S.tickets],
+        ["Top issues","The most common ticket categories in the line.","Five categories with the most tickets.",S.tickets],
+        ["Owner","The person accountable for the line&rsquo;s score.","Placeholder until names are given.",""]
+      ]
+    };
+  },
   guide:
    '<div class="hcard"><h3><span class="no">A</span>Line score</h3><p>Average of ticket quality (100 minus 3 per High and 2 per Medium ticket per 1,000 orders) and responsiveness (share of tickets answered and resolved within deadline). Consult also includes the average audit score.</p><p class="why">Each head gets one number they can influence.</p></div>'+
    '<div class="hcard"><h3><span class="no">B</span>Card details</h3><p>Owner, score and change, a weekly line of ticket points lost, the key counts and the top five issues by volume.</p><p class="why">Everything a business-line review needs on one card.</p></div>'+
    '<div class="hcard"><h3><span class="no">C</span>Side-by-side table</h3><p>The same measures for all three lines, including average response and resolution hours and overdue pending tickets.</p><p class="why">Makes fair comparison easy, since every line is measured against its own orders.</p></div>'
 });
-
 </script>
 </body>
 </html>
