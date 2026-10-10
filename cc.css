@@ -251,3 +251,5 @@ footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);font-si
 :root[data-theme="dark"] .wf .seg.s-medium, :root[data-theme="dark"] .wf .seg.s-others{color:#fff}
 :root[data-theme="dark"] .wf .seg.s-critical{color:#3a120c}
 @media (max-width:560px){ .wf .seg:not(.keep){font-size:0} .headline h2{font-size:24px} }
+.dtile .rank{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:18px;line-height:18px}
+.dtile .flag{margin-left:0;line-height:16px}
