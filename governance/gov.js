@@ -561,7 +561,7 @@
 
   /* ================= exports: copy, PNG, PowerPoint ================= */
   function toast(msg){ var t=document.getElementById("gtoast"); if(!t){ t=document.createElement("div"); t.id="gtoast"; document.body.appendChild(t); } t.textContent=msg; t.className="show"; clearTimeout(t._h); t._h=setTimeout(function(){ t.className=""; },3200); }
-  var LOADED={};
+  var LOADED={}, VENDOR="vendor/";
   function loadScript(src){ if(LOADED[src]) return LOADED[src]; LOADED[src]=new Promise(function(res,rej){ var s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=function(){ LOADED[src]=null; rej(new Error("could not load "+src)); }; document.head.appendChild(s); }); return LOADED[src]; }
   function copyText(txt){
     function fb(){ var a=document.createElement("textarea"); a.value=txt; a.style.position="fixed"; a.style.opacity="0"; document.body.appendChild(a); a.select(); try{ document.execCommand("copy"); toast("Copied"); }catch(e){ toast("Select the text and copy it manually"); } a.remove(); }
@@ -574,7 +574,7 @@
       var b=document.createElement("button"); b.className="xp-btn noprint"; b.type="button"; b.title="Download this block as an image for slides"; b.innerHTML="&#8681; PNG"; el.appendChild(b);
       b.addEventListener("click", function(ev){ ev.stopPropagation(); b.disabled=true; b.textContent="…";
         var bg=getComputedStyle(document.body).backgroundColor||"#fff";
-        loadScript("vendor/html-to-image.js?v=1").then(function(){ return root.htmlToImage.toPng(el,{pixelRatio:2, backgroundColor:bg, cacheBust:true, filter:function(n){ return !(n.classList && n.classList.contains("xp-btn")); }}); })
+        loadScript(VENDOR+"html-to-image.js?v=1").then(function(){ return root.htmlToImage.toPng(el,{pixelRatio:2, backgroundColor:bg, cacheBust:true, filter:function(n){ return !(n.classList && n.classList.contains("xp-btn")); }}); })
           .then(function(url){ var a=document.createElement("a"); a.href=url; a.download="Apollo247_"+fname((el.dataset.title||"chart")+"_"+(CTX?CTX.p.short||CTX.p.label:""))+".png"; document.body.appendChild(a); a.click(); a.remove(); toast("Image downloaded"); })
           .catch(function(e){ toast("Could not create the image: "+(e&&e.message||e)); })
           .then(function(){ b.disabled=false; b.innerHTML="&#8681; PNG"; });
@@ -663,7 +663,7 @@
   }
   function exportDeck(btn){
     if(!CTX){ toast("Data is still loading"); return; } btn.disabled=true; var t=btn.innerHTML; btn.textContent="Building deck…";
-    loadScript("vendor/pptxgen.bundle.js?v=1").then(function(){ return buildDeck(CTX); }).then(function(){ toast("Board deck downloaded"); })
+    loadScript(VENDOR+"pptxgen.bundle.js?v=1").then(function(){ return buildDeck(CTX); }).then(function(){ toast("Board deck downloaded"); })
       .catch(function(e){ toast("Could not build the deck: "+(e&&e.message||e)); if(root.console) console.error(e); }).then(function(){ btn.disabled=false; btn.innerHTML=t; });
   }
 
@@ -683,16 +683,19 @@
     method:"How every number is calculated, where the data comes from, which registers still need connecting, and known data limits."
   };
   function kmsgHtml(arr, id){ return '<div class="kmsg xp" data-title="Key messages"><div class="kh"><span class="kt">&#9733; Key messages for slides</span><button class="btn noprint" type="button" data-copy="'+id+'">Copy text</button></div><ul id="'+id+'">'+arr.map(function(t){ return '<li>'+t+'</li>'; }).join("")+'</ul></div>'; }
-  function start(key){
+  function start(key, opts){
+    opts=opts||{}; if(opts.vendor) VENDOR=opts.vendor;
     var isPack=key==="pack", meta=PAGES.filter(function(p){ return p.k===key; })[0]||{t:"Board pack", f:"pack.html"}, here=meta.f;
     var nav='<div class="nav10-wrap noprint"><nav class="nav10" aria-label="Pages">'+PAGES.map(function(p,i){ return '<a href="'+p.f+'"'+(p.f===here?' aria-current="page"':'')+'><span class="n">'+(i+1)+'</span><span class="t">'+p.t+'</span></a>'; }).join("")+'<a href="pack.html"'+(isPack?' aria-current="page"':'')+'><span class="n">&#9112;</span><span class="t">Board pack</span></a></nav></div>';
-    var shell=nav+'<header class="top"><div class="top-id"><span class="mark">APOLLO 24|7</span><div><h1>Clinical Governance &amp; Compliance</h1><p>'+(isPack?'Board pack &middot; all sections':'Page '+(PAGES.indexOf(meta)+1)+' of 10 &middot; '+meta.t)+' &middot; for the Chief Medical Operations Office</p></div></div>'+
+    if(opts.navHtml) nav=opts.navHtml;
+    var packHref=opts.packHref||"pack.html", methodHref=opts.methodHref||"method.html";
+    var shell=nav+'<header class="top"><div class="top-id"><span class="mark">APOLLO 24|7</span><div><h1>Clinical Governance &amp; Compliance</h1><p>'+(opts.subtitle||((isPack?'Board pack &middot; all sections':'Page '+(PAGES.indexOf(meta)+1)+' of 10 &middot; '+meta.t)+' &middot; for the Chief Medical Operations Office'))+'</p></div></div>'+
       '<div class="top-meta"><span class="status-chip off" id="status"><span class="dot"></span><span id="statusText">Loading live data…</span></span><span>Data through <b id="through">—</b></span>'+
-      '<span class="noprint gbtns"><button class="btn primary" type="button" id="deckBtn">&#8681; Board deck (.pptx)</button><button class="btn" type="button" onclick="window.print()">Print / PDF</button>'+(isPack?'':'<a class="btn" href="pack.html">Board pack</a>')+'<a class="ext" href="'+BASE+'" target="_blank" rel="noopener">Compliance site &#8599;</a></span></div></header>'+
-      (GUIDE[key]?'<p class="page-intro">'+GUIDE[key]+'</p>':(isPack?'<p class="page-intro">Every board section on one page, laid out for printing. Use <b>Print / PDF</b> and choose &ldquo;Save as PDF&rdquo; (landscape) to create the board pack.</p>':''))+
+      '<span class="noprint gbtns"><button class="btn primary" type="button" id="deckBtn">&#8681; Board deck (.pptx)</button><button class="btn" type="button" onclick="window.print()">Print / PDF</button>'+(isPack?'':'<a class="btn" href="'+packHref+'">Board pack</a>')+(opts.fullHref?'<a class="btn" href="'+opts.fullHref+'">Full governance report &#8599;</a>':'')+'<a class="ext" href="'+BASE+'" target="_blank" rel="noopener">Compliance site &#8599;</a></span></div></header>'+
+      ((opts.intro||GUIDE[key])?'<p class="page-intro">'+(opts.intro||GUIDE[key])+'</p>':(isPack?'<p class="page-intro">Every board section on one page, laid out for printing. Use <b>Print / PDF</b> and choose &ldquo;Save as PDF&rdquo; (landscape) to create the board pack.</p>':''))+
       '<div class="periodbar"><span class="lbl">Quarter</span><div class="chips" id="qChips"></div><span class="lbl">Month</span><div class="chips" id="mChips"></div><span class="range" id="rangeLabel"></span></div>'+
       '<div id="notes"></div><div id="kmsg"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
-      '<footer>Apollo 24|7 Clinical Governance &amp; Compliance report. Numbers are read live from Google Sheets (a saved copy shows instantly while the live read finishes). Definitions, sources and data limits are on <a href="method.html">Method &amp; Data</a>. Quarters follow the Indian financial year (April&ndash;March).</footer>';
+      '<footer>Apollo 24|7 Clinical Governance &amp; Compliance report. Numbers are read live from Google Sheets (a saved copy shows instantly while the live read finishes). Definitions, sources and data limits are on <a href="'+methodHref+'">Method &amp; Data</a>. Quarters follow the Indian financial year (April&ndash;March).</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap gov"+(isPack?" pack":""); wrap.innerHTML=shell; document.body.appendChild(wrap);
     document.getElementById("deckBtn").addEventListener("click", function(){ exportDeck(this); });
     document.addEventListener("click", function(ev){ var b=ev.target.closest&&ev.target.closest("[data-copy]"); if(!b) return; var ul=document.getElementById(b.dataset.copy); if(!ul) return;
@@ -725,7 +728,7 @@
       try{
         if(isPack){ document.getElementById("kmsg").innerHTML=""; document.getElementById("content").innerHTML=PACK.map(function(k,i){ var m=PAGES.filter(function(x){ return x.k===k; })[0];
             return '<section class="packsec"><h1 class="pack-h"><span>'+(i+1)+'</span>'+m.t+' &middot; '+esc(p.label)+'</h1>'+kmsgHtml(MSG[k](ctx),"km_"+k)+PAGE[k](ctx)+'</section>'; }).join(""); }
-        else { document.getElementById("kmsg").innerHTML=kmsgHtml(MSG[key](ctx),"km_"+key); document.getElementById("content").innerHTML=PAGE[key](ctx); }
+        else { document.getElementById("kmsg").innerHTML=kmsgHtml(MSG[key](ctx),"km_"+key); document.getElementById("content").innerHTML=PAGE[key](ctx)+(opts.extra?opts.extra(ctx):""); }
       }catch(err){ document.getElementById("content").innerHTML='<div class="panel empty">Could not draw this page: '+esc(err.message)+'</div>'; if(root.console) console.error(err); }
       UI.wireCharts(); addPngButtons(); if(y) root.scrollTo(0,y);
     }
@@ -748,5 +751,5 @@
     }).catch(function(err){ if(D){ setStatus("stale"); return; } document.getElementById("content").innerHTML='<div class="panel empty">Could not load data: '+esc(err&&err.message||err)+'</div>'; });
   }
 
-  root.GOV = { start:start, CFG:CFG, IND:IND, bundle:bundle, periods:periods, actions:actions, MSG:MSG, TPG:TPG };
+  root.GOV = { PAGES:PAGES, GUIDE:GUIDE, BASE:BASE, start:start, CFG:CFG, IND:IND, bundle:bundle, periods:periods, actions:actions, MSG:MSG, TPG:TPG };
 })(window);
