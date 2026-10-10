@@ -115,17 +115,21 @@
       '<div class="periodbar"><span class="lbl">Period</span><div class="chips" id="periodChips"></div>'+
       '<div class="dates"><input type="date" id="dFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="dTo" aria-label="To"></div>'+
       '<span class="range" id="rangeLabel"></span></div>'+
-      '<div id="notes"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets… (about 15 seconds)</div></div>'+
+      '<div id="notes"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
       (opts.guide?'<div class="section-label"><span class="n">?</span>How to read this page</div><div class="howto">'+opts.guide+'</div>':'')+
-      '<footer><b style="color:var(--ink)">Page '+(idx+1)+' of 10.</b> All numbers are read live from the Google Sheets each time the page opens. Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
+      '<footer><b style="color:var(--ink)">Page '+(idx+1)+' of 10.</b> All numbers are read live from the Google Sheets each time the page opens (a saved copy is shown instantly while the live read finishes). Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
       'Ticket data starts August 2026; the PDS and Non Pharma audit sheets currently keep audits from 21 Sep 2026 onwards, so earlier audit numbers are partial.</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap"; wrap.innerHTML=shell; document.body.appendChild(wrap);
 
-    var D=null, PER=[], RANGE=null;
-    function setStatus(){
-      var st=D.status, bad=Object.keys(st).filter(function(k){ return st[k]!=="ok"; }), chip=document.getElementById("status");
-      chip.className="status-chip"+(bad.length?" warn":""); document.getElementById("statusText").textContent = bad.length ? "Partially live" : "Live from Google Sheets";
-      chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n"); document.getElementById("through").textContent=U.dateLabel(D.through);
+    var D=null, PER=[], RANGE=null, wired=false, shownPrint="";
+    function timeLabel(t){ try{ var d=new Date(t); return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short"})+", "+d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } }
+    function setStatus(mode){
+      var st=D.status||{}, bad=Object.keys(st).filter(function(k){ return !/^ok/.test(st[k]); }), chip=document.getElementById("status"), txt=document.getElementById("statusText");
+      if(mode==="saved"){ chip.className="status-chip off"; txt.textContent="Saved copy · "+timeLabel(D.fetchedAt)+" · refreshing…"; }
+      else if(mode==="stale"){ chip.className="status-chip warn"; txt.textContent="Saved copy · "+timeLabel(D.fetchedAt)+" (live refresh failed)"; }
+      else { chip.className="status-chip"+(bad.length?" warn":""); txt.textContent = bad.length ? "Partially live" : "Live from Google Sheets"; }
+      chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n")+(D.fetchedAt?"\nRead at "+timeLabel(D.fetchedAt):"");
+      document.getElementById("through").textContent=U.dateLabel(D.through);
     }
     function run(){
       var s=RANGE.start, e=RANGE.end, p=PER.filter(function(x){ return x.start===s&&x.end===e; })[0]||{start:s,end:e,label:U.dateLabel(s)+" – "+U.dateLabel(e)};
@@ -136,26 +140,46 @@
       var notes=[]; if(M.audit.incomplete && opts.usesAudits!==false) notes.push("<b>Audit data is incomplete for this period.</b> "+M.audit.missing.map(function(m){ return esc(m.type)+" audits are held only from "+(m.from?U.dateLabel(m.from):"(none)"); }).join("; ")+". Audit-based numbers cover what the live sheets still hold.");
       document.getElementById("notes").innerHTML=notes.map(note).join("");
       var ctx={D:D, M:M, PM:PM, p:p, pv:pv, s:s, e:e, periods:PER, auditCmp:!!(PM&&!PM.audit.incomplete&&!M.audit.incomplete)};
+      var y=root.scrollY||0;
       try{ document.getElementById("content").innerHTML=opts.render(ctx); }catch(err){ document.getElementById("content").innerHTML='<div class="panel empty">Could not draw this page: '+esc(err.message)+'</div>'; if(root.console) console.error(err); }
       wireCharts(); if(opts.after) opts.after(ctx);
+      if(y) root.scrollTo(0,y);
     }
-    APP.load().then(function(d){
-      D=d; PER=APP.periods(D); setStatus();
+    function saveRange(){ try{ localStorage.setItem("cc10_range", JSON.stringify(RANGE)); }catch(e){} }
+    function show(d, mode){
+      D=d; PER=APP.periods(D); setStatus(mode);
       if(!PER.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
-      var ok=PER.filter(function(p){ return !APP.metrics(D,p.start,p.end).audit.incomplete; });
+      var inc={}; PER.forEach(function(p){ inc[p.start+p.end]=APP.metrics(D,p.start,p.end).audit.incomplete; });
+      var ok=PER.filter(function(p){ return !inc[p.start+p.end]; });
       var def=ok.length?ok[ok.length-1]:PER[PER.length-1];
-      var saved=null; try{ saved=JSON.parse(localStorage.getItem("cc10_range")||"null"); }catch(e){}
-      RANGE = (saved && saved.start>=APP.CFG.FIRST_MONTH+"-01" && saved.end<=D.through && saved.start<=saved.end) ? saved : {start:def.start, end:def.end};
+      if(!RANGE){ var saved=null; try{ saved=JSON.parse(localStorage.getItem("cc10_range")||"null"); }catch(e){} RANGE=saved; }
+      if(!(RANGE && RANGE.start>=APP.CFG.FIRST_MONTH+"-01" && RANGE.end<=D.through && RANGE.start<=RANGE.end)) RANGE={start:def.start, end:def.end};
       PER.forEach(function(p){ if(p.key && RANGE.start===p.start && p.partial && RANGE.end!==p.end) RANGE.end=p.end; });   /* keep MTD current */
       var dF=document.getElementById("dFrom"), dT=document.getElementById("dTo"); dF.min=dT.min=APP.CFG.FIRST_MONTH+"-01"; dF.max=dT.max=D.through;
-      document.getElementById("periodChips").innerHTML=PER.map(function(p){ var inc=APP.metrics(D,p.start,p.end).audit.incomplete;
-        return '<button class="chip" data-s="'+p.start+'" data-e="'+p.end+'"'+(inc?' title="Audit data incomplete for this month"':'')+'>'+esc(p.label)+(inc?' *':'')+'</button>'; }).join("");
-      function save(){ try{ localStorage.setItem("cc10_range", JSON.stringify(RANGE)); }catch(e){} }
-      document.getElementById("periodChips").addEventListener("click", function(ev){ var t=ev.target; if(!t.dataset||!t.dataset.s) return; RANGE={start:t.dataset.s,end:t.dataset.e}; save(); run(); });
-      function onDate(){ if(dF.value&&dT.value&&dF.value<=dT.value){ RANGE={start:dF.value,end:dT.value}; save(); run(); } }
-      dF.addEventListener("change", onDate); dT.addEventListener("change", onDate);
+      document.getElementById("periodChips").innerHTML=PER.map(function(p){ var i=inc[p.start+p.end];
+        return '<button class="chip" data-s="'+p.start+'" data-e="'+p.end+'"'+(i?' title="Audit data incomplete for this month"':'')+'>'+esc(p.label)+(i?' *':'')+'</button>'; }).join("");
+      if(!wired){ wired=true;
+        document.getElementById("periodChips").addEventListener("click", function(ev){ var t=ev.target.closest?ev.target.closest(".chip"):ev.target; if(!t||!t.dataset||!t.dataset.s) return; RANGE={start:t.dataset.s,end:t.dataset.e}; saveRange(); run(); });
+        var onDate=function(){ if(dF.value&&dT.value&&dF.value<=dT.value){ RANGE={start:dF.value,end:dT.value}; saveRange(); run(); } };
+        dF.addEventListener("change", onDate); dT.addEventListener("change", onDate);
+      }
       run();
-    }).catch(function(err){ document.getElementById("content").innerHTML='<div class="panel empty">Could not load data: '+esc(err&&err.message||err)+'</div>'; });
+    }
+    /* 1) draw the saved copy at once (if any)  2) read the sheets live in the background  3) redraw only if something changed */
+    var liveP=APP.load();
+    APP.loadSaved().then(function(saved){
+      if(saved && !D){ shownPrint=APP.fingerprint(saved); show(saved, "saved"); }
+      return liveP.then(function(d){
+        var fp=APP.fingerprint(d), healthy=!Object.keys(d.status||{}).some(function(k){ return !/^ok/.test(d.status[k]); });
+        if(D && !healthy){ setStatus("stale"); return; }          /* keep the good saved copy on screen */
+        if(D && fp===shownPrint){ D.status=d.status; D.fetchedAt=d.fetchedAt; setStatus("live"); }
+        else show(d, "live");
+        APP.save(d);
+      });
+    }).catch(function(err){
+      if(D){ setStatus("stale"); return; }
+      document.getElementById("content").innerHTML='<div class="panel empty">Could not load data: '+esc(err&&err.message||err)+'</div>';
+    });
   }
 
   root.UI = { page:page, esc:esc, fi:fi, f1:f1, ragLabel:ragLabel, delta:delta, meter:meter, gauge:gauge, spark:spark, lineChart:lineChart, legend:legend, note:note, PAGES:PAGES };

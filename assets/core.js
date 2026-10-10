@@ -116,6 +116,31 @@
     return fetchText("https://docs.google.com/spreadsheets/d/"+file+"/gviz/tq?tqx=out:json&"+base+"&tq="+encodeURIComponent(tq))
       .then(function(t){ return JSON.parse(t.replace(/^[^\(]*\(/,"").replace(/\);\s*$/,"")); });
   }
+  /* ---------- speed: remember each sheet's column plan so a page needs one request per tab, not two ---------- */
+  var PLAN_VER="p1";
+  function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||"null"); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  function normLabel(x){ return String(x==null?"":x).replace(/\s+/g," ").trim().toLowerCase(); }
+  function sameLabels(row, labels){
+    if(!row || !labels || row.length < labels.length) return false;
+    for(var i=0;i<labels.length;i++){ if(normLabel(row[i])!==normLabel(labels[i])) return false; }
+    return true;
+  }
+  /* buildPlan(header) -> {tq, labels, ctx}. Cached plan is used straight away and checked against the header row that comes back. */
+  function plannedCsv(key, file, base, headers, buildPlan){
+    var ck="cc10_plan_"+PLAN_VER+"_"+key, cached=lsGet(ck);
+    function viaHeader(){
+      return gvizCsv(file, base, "select * limit 1", headers).then(function(h){
+        var hdr=(h[0]||[]).map(function(x){ return String(x).trim(); });
+        var plan=buildPlan(hdr); lsSet(ck, plan);
+        return gvizCsv(file, base, plan.tq, headers).then(function(rows){ return {plan:plan, rows:rows}; });
+      });
+    }
+    if(cached && cached.tq) return gvizCsv(file, base, cached.tq, headers).then(function(rows){
+      return sameLabels(rows[0], cached.labels) ? {plan:cached, rows:rows} : viaHeader();
+    }, viaHeader);
+    return viaHeader();
+  }
   function splitParamLabel(raw){
     var s = String(raw||"").replace(/\r/g,"");
     var firstLine = s.split("\n")[0];
@@ -132,47 +157,53 @@
   /* audit checklist rows, with every parameter score (for the standards page) */
   function loadChecklist(src){
     var base="sheet="+encodeURIComponent(src.sheet);
-    return gvizCsv(src.file, base, "select * limit 1", src.headers).then(function(h){
-      var hdr=(h[0]||[]).map(function(x){ return String(x).trim(); });
+    var fixed=["appt","doc","dtype","spec","aud","auditor","st","en","att"];
+    function buildPlan(hdr){
       var ix={ appt:findIdx(hdr,/^date of appointment/i), doc:findIdx(hdr,/^doctor name$/i), dtype:findIdx(hdr,/^doctor type$/i), spec:findIdx(hdr,/^specialty$/i),
         aud:findIdx(hdr,/^date of audit$/i), auditor:findIdx(hdr,/^auditor name$/i), st:findIdx(hdr,/^audit start time$/i), en:findIdx(hdr,/^audit end time$/i),
         tot:findIdx(hdr,/^total score$/i), att:findIdx(hdr,/^attained %$/i) };
       if(ix.aud<0||ix.auditor<0||ix.doc<0||ix.att<0) throw new Error("columns not found in "+src.sheet);
       var params=[]; if(ix.en>=0 && ix.tot>ix.en){ for(var p=ix.en+1;p<ix.tot;p++) params.push(p); }
-      var fixed=["appt","doc","dtype","spec","aud","auditor","st","en","att"];
-      var sel=fixed.map(function(k){ return ix[k]; }).concat(params);
-      var tq="select "+sel.filter(function(i){ return i>=0; }).map(colLetter).join(",");
-      var labels=params.map(function(p){ return hdr[p]; });
-      return gvizCsv(src.file, base, tq, src.headers).then(function(rows){
-        var pos={}, k=0; fixed.forEach(function(f){ pos[f]= ix[f]>=0 ? k++ : -1; });
-        var pStart=k, defs=labels.map(splitParamLabel), cur=null;
-        defs.forEach(function(d){ if(d.group) cur=d.group; else d.group=cur; d.max=d.pts; });
-        if(defs.some(function(d){ return d.group; })) defs.forEach(function(d){ if(!d.group) d.group="Clinical Parameters"; });
-        var out=[], obsMax=defs.map(function(){ return 0; });
-        for(var i=1;i<rows.length;i++){
-          var r=rows[i]; if(!r||r.length<3) continue;
-          var g=function(f){ return pos[f]>=0 ? (r[pos[f]]||"").trim() : ""; };
-          var a=parseAnyDate(g("aud")), ap=parseAnyDate(g("appt")); if(!a && !ap) continue;
-          var au=canonName(g("auditor")), done=!!(a&&g("auditor"));
-          var pv=[]; for(var j=0;j<defs.length;j++){ var v=parseNum(r[pStart+j]); pv.push(v); if(done&&v!==null&&v>obsMax[j]) obsMax[j]=v; }
-          var s0=parseTimeAMPM(g("st")), e0=parseTimeAMPM(g("en")), mins=null;
-          if(s0!==null&&e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd>0&&dd<=3600) mins=dd/60; }
-          out.push({type:src.type, a:done?a:null, p:ap, doc:g("doc"), dtype:g("dtype")||"—", spec:g("spec")||"—", au:done?au:"", s:done?parsePct(g("att")):null, mins:done?mins:null, pv:done?pv:null});
-        }
-        defs.forEach(function(d,j){ if(!d.max||d.max<obsMax[j]) d.max=obsMax[j]||d.max; });
-        return {rows:out, defs:defs};
-      });
+      var sel=fixed.map(function(k){ return ix[k]; }).filter(function(i){ return i>=0; }).concat(params);
+      var pos={}, k=0; fixed.forEach(function(f){ pos[f]= ix[f]>=0 ? k++ : -1; });
+      return { tq:"select "+sel.map(colLetter).join(","), labels:sel.map(function(i){ return hdr[i]; }),
+               ctx:{ pos:pos, pStart:k, paramLabels:params.map(function(p){ return hdr[p]; }) } };
+    }
+    return plannedCsv("chk_"+src.file.slice(0,8)+"_"+src.sheet, src.file, base, src.headers, buildPlan).then(function(res){
+      var rows=res.rows, pos=res.plan.ctx.pos, pStart=res.plan.ctx.pStart;
+      var defs=res.plan.ctx.paramLabels.map(splitParamLabel), cur=null;
+      defs.forEach(function(d){ if(d.group) cur=d.group; else d.group=cur; d.max=d.pts; });
+      if(defs.some(function(d){ return d.group; })) defs.forEach(function(d){ if(!d.group) d.group="Clinical Parameters"; });
+      var out=[], obsMax=defs.map(function(){ return 0; });
+      for(var i=1;i<rows.length;i++){
+        var r=rows[i]; if(!r||r.length<3) continue;
+        var g=function(f){ return pos[f]>=0 ? (r[pos[f]]||"").trim() : ""; };
+        var a=parseAnyDate(g("aud")), ap=parseAnyDate(g("appt")); if(!a && !ap) continue;
+        var au=canonName(g("auditor")), done=!!(a&&g("auditor"));
+        var pv=[]; for(var j=0;j<defs.length;j++){ var v=parseNum(r[pStart+j]); pv.push(v); if(done&&v!==null&&v>obsMax[j]) obsMax[j]=v; }
+        var s0=parseTimeAMPM(g("st")), e0=parseTimeAMPM(g("en")), mins=null;
+        if(s0!==null&&e0!==null){ var dd=e0-s0; if(dd<0) dd+=86400; if(dd>0&&dd<=3600) mins=dd/60; }
+        out.push({type:src.type, a:done?a:null, p:ap, doc:g("doc"), dtype:g("dtype")||"—", spec:g("spec")||"—", au:done?au:"", s:done?parsePct(g("att")):null, mins:done?mins:null, pv:done?pv:null});
+      }
+      defs.forEach(function(d,j){ if(!d.max||d.max<obsMax[j]) d.max=obsMax[j]||d.max; });
+      return {rows:out, defs:defs};
     });
   }
   function loadCancellationTab(base){
-    return gvizCsv(CFG.FILE_CANCEL, base, "select *", 0).then(function(rows){
-      var hdr=rows[0].map(function(x){ return String(x).trim(); }); function c(re){ return findIdx(hdr,re); }
+    var keys=["appt","doc","dtype","aud","auditor","gen","reason","call","resp","why"];
+    function buildPlan(hdr){
+      function c(re){ return findIdx(hdr,re); }
       var ix={appt:c(/^date of appointment/i), doc:c(/^doctor name$/i), dtype:c(/^doctor type$/i), aud:c(/^date of audit$/i), auditor:c(/^auditor name$/i),
         gen:c(/^genuine cancellation/i), reason:c(/^cancellation reason mentioned correctly/i), call:c(/^call initiated by doctor/i), resp:c(/^customer responded/i), why:c(/^reason for the cancellation/i)};
       if(ix.aud<0) throw new Error("cancellation columns not found");
-      var out=[];
-      for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r||r.length<5) continue;
-        var g=function(f){ return ix[f]>=0 ? (r[ix[f]]||"").trim() : ""; };
+      var sel=keys.map(function(k){ return ix[k]; }).filter(function(i){ return i>=0; });
+      var pos={}, k=0; keys.forEach(function(f){ pos[f]= ix[f]>=0 ? k++ : -1; });
+      return { tq:"select "+sel.map(colLetter).join(","), labels:sel.map(function(i){ return hdr[i]; }), ctx:{pos:pos} };
+    }
+    return plannedCsv("can_"+base, CFG.FILE_CANCEL, base, 0, buildPlan).then(function(res){
+      var rows=res.rows, pos=res.plan.ctx.pos, out=[];
+      for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r||r.length<3) continue;
+        var g=function(f){ return pos[f]>=0 ? (r[pos[f]]||"").trim() : ""; };
         var a=parseAnyDate(g("aud")), ap=parseAnyDate(g("appt")); if(!a && !ap) continue;
         out.push({a:(a&&g("auditor"))?a:null, p:ap, doc:g("doc"), dtype:g("dtype")||"—", au:canonName(g("auditor")), gen:g("gen"), reasonOk:g("reason"), call:g("call"), resp:g("resp"), why:g("why")}); }
       return out;
@@ -186,20 +217,33 @@
           .concat(res[1].filter(function(r){ var b=basis(r); return b && b >= CFG.CANCEL_SWITCH_DATE; }));
       });
   }
-  function consultCols(){
+  var CONSULT_PLAN_KEY="cc10_plan_"+PLAN_VER+"_consults";
+  function withLit(L){ L.lit = function(iso){ return L.isDate ? "date '"+iso+"'" : "'"+iso+"'"; }; return L; }
+  function consultColsFresh(){
     return gvizJson(CFG.FILE_CONSULT, "gid="+CFG.CONSULT_GID, "select * limit 1").then(function(j){
-      var L={}, isDate=false;
+      var L={isDate:false};
       j.table.cols.forEach(function(c,i){ var l=(c.label||"").trim().toLowerCase(), x=colLetter(i);
-        if(l==="date"){ L.d=x; isDate=/^date/.test(c.type||""); } else if(l==="consult_type") L.t=x; else if(l==="status") L.s=x; else if(l==="total_consult") L.n=x; else if(l==="doctor_name") L.doc=x; });
+        if(l==="date"){ L.d=x; L.isDate=/^date/.test(c.type||""); } else if(l==="consult_type") L.t=x; else if(l==="status") L.s=x; else if(l==="total_consult") L.n=x; else if(l==="doctor_name") L.doc=x; });
       if(!L.d||!L.t||!L.s||!L.n) throw new Error("Extract 1 columns not found");
-      L.lit = function(iso){ return isDate ? "date '"+iso+"'" : "'"+iso+"'"; };
-      return L;
+      lsSet(CONSULT_PLAN_KEY, L);
+      return withLit(L);
+    });
+  }
+  function consultCols(){ var c=lsGet(CONSULT_PLAN_KEY); return c&&c.d ? Promise.resolve(withLit(c)) : consultColsFresh(); }
+  /* run a consult query with the cached columns; if the sheet layout changed, re-read the header once and retry */
+  function consultQuery(build, expect){
+    return consultCols().then(function(L){
+      return gvizJson(CFG.FILE_CONSULT, "gid="+CFG.CONSULT_GID, build(L)).then(function(j){
+        var cols=(j.table&&j.table.cols)||[], ok=expect.every(function(e,i){ return cols[i] && normLabel(cols[i].label)===e; });
+        if(ok) return j;
+        return consultColsFresh().then(function(L2){ return gvizJson(CFG.FILE_CONSULT, "gid="+CFG.CONSULT_GID, build(L2)); });
+      });
     });
   }
   var TYPE_MAP = {"PDS":"PDS","PDS Mounjaro":"PDS- Mounjaro","Non Pharma":"Non Pharma","GLP":"WLP - Non Pharma"};
   /* consults per day x project x status (all statuses kept, project rules applied in metrics) */
-  function loadConsultsDay(L){
-    return gvizJson(CFG.FILE_CONSULT, "gid="+CFG.CONSULT_GID, "select "+L.d+","+L.t+","+L.s+",sum("+L.n+") where "+L.d+" >= "+L.lit("2026-07-01")+" group by "+L.d+","+L.t+","+L.s).then(function(j){
+  function loadConsultsDay(){
+    return consultQuery(function(L){ return "select "+L.d+","+L.t+","+L.s+",sum("+L.n+") where "+L.d+" >= "+L.lit("2026-07-01")+" group by "+L.d+","+L.t+","+L.s; }, ["date","consult_type","status"]).then(function(j){
       var out=[];
       (j.table.rows||[]).forEach(function(row){ var c=row.c||[]; var d=parseAnyDate(c[0]&&c[0].v!=null?c[0].v:""); if(!d) return;
         var raw=c[1]&&c[1].v?String(c[1].v):"", st=c[2]&&c[2].v?String(c[2].v).trim():"", n=c[3]&&typeof c[3].v==="number"?c[3].v:0;
@@ -208,9 +252,9 @@
     });
   }
   /* consults per day x doctor: completed and total (for doctor fulfilment) */
-  function loadConsultsDoc(L){
-    if(!L.doc) return Promise.resolve([]);
-    return gvizJson(CFG.FILE_CONSULT, "gid="+CFG.CONSULT_GID, "select "+L.d+","+L.doc+","+L.s+",sum("+L.n+") where "+L.d+" >= "+L.lit("2026-07-01")+" group by "+L.d+","+L.doc+","+L.s).then(function(j){
+  function loadConsultsDoc(){
+    return consultQuery(function(L){ return "select "+L.d+","+(L.doc||L.t)+","+L.s+",sum("+L.n+") where "+L.d+" >= "+L.lit("2026-07-01")+" group by "+L.d+","+(L.doc||L.t)+","+L.s; }, ["date","doctor_name","status"]).then(function(j){
+      if(!((j.table.cols||[])[1]) || normLabel(j.table.cols[1].label)!=="doctor_name") return [];
       var by={}, out=[];
       (j.table.rows||[]).forEach(function(row){ var c=row.c||[]; var d=parseAnyDate(c[0]&&c[0].v!=null?c[0].v:""); var doc=c[1]&&c[1].v?String(c[1].v).trim():""; if(!d||!doc) return;
         var st=c[2]&&c[2].v?String(c[2].v).trim():"", n=c[3]&&typeof c[3].v==="number"?c[3].v:0;
@@ -220,8 +264,12 @@
     });
   }
   function num(x){ var n=parseFloat(x); return isNaN(n)?null:n; }
+  var TICKET_COLS = {tq:"select B,C,D,E,F,G,H,I", labels:["ticket_date","ticket_no","type","C2","C3","first_response_time_in_hrs","resolution_time","status"]};
   function loadTicketsData(){
-    return gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_TICKETS_DATA, null, 0).then(function(rows){
+    var base="gid="+CFG.GID_TICKETS_DATA;
+    return gvizCsv(CFG.FILE_TICKETS, base, TICKET_COLS.tq, 0).then(function(rows){
+      return sameLabels(rows[0], TICKET_COLS.labels) ? rows : gvizCsv(CFG.FILE_TICKETS, base, null, 0);
+    }, function(){ return gvizCsv(CFG.FILE_TICKETS, base, null, 0); }).then(function(rows){
       var h=rows[0].map(function(x){ return String(x).trim().toLowerCase(); });
       var ix={id:h.indexOf("ticket_no"), date:h.indexOf("ticket_date"), type:h.indexOf("type"), c2:h.indexOf("c2"), c3:h.indexOf("c3"), frt:h.indexOf("first_response_time_in_hrs"), res:h.indexOf("resolution_time"), st:h.indexOf("status")};
       if(ix.date<0||ix.type<0||ix.c2<0) throw new Error("ticket Data tab columns not found");
@@ -258,12 +306,11 @@
   function load(){
     var status={};
     function guard(name, p, fb){ return p.then(function(v){ status[name]="ok"; return v; }).catch(function(e){ status[name]="error: "+(e&&e.message||e); return fb; }); }
-    var colsP = consultCols();
     return Promise.all([
       guard("Audit checklists", Promise.all(AUDIT_SOURCES.map(function(s){ return loadChecklist(s).catch(function(){ status["Audit checklists"]="partial"; return {rows:[],defs:[]}; }); })), []),
       guard("PDS Cancellation reviews", loadCancellation(), []),
-      guard("Consults (Extract 1)", colsP.then(loadConsultsDay), []),
-      guard("Consults by doctor", colsP.then(loadConsultsDoc), []),
+      guard("Consults (Extract 1)", loadConsultsDay(), []),
+      guard("Consults by doctor", loadConsultsDoc(), []),
       guard("Consult & Diagnostics tickets", loadTicketsData(), []),
       guard("Medicine tickets", loadTicketsMedicine(), []),
       guard("Orders", loadOrders(), [])
@@ -278,6 +325,40 @@
       D.medicineRows = r[5].length;
       return D;
     });
+  }
+
+  /* ---------- saved copy of the last load (IndexedDB), so pages open instantly and refresh in the background ---------- */
+  var IDB_NAME="cc10", IDB_STORE="kv", SAVE_KEY="data_v1";
+  function idb(){
+    return new Promise(function(res, rej){
+      if(!root.indexedDB) return rej(new Error("no indexedDB"));
+      var rq; try{ rq=root.indexedDB.open(IDB_NAME, 1); }catch(e){ return rej(e); }
+      rq.onupgradeneeded=function(){ rq.result.createObjectStore(IDB_STORE); };
+      rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); };
+    });
+  }
+  function loadSaved(){
+    return idb().then(function(db){ return new Promise(function(res){
+      try{ var rq=db.transaction(IDB_STORE,"readonly").objectStore(IDB_STORE).get(SAVE_KEY);
+        rq.onsuccess=function(){ var v=rq.result; res(v && v.D && v.D.tickets ? v.D : null); }; rq.onerror=function(){ res(null); };
+      }catch(e){ res(null); } }); }).catch(function(){ return null; });
+  }
+  function save(D){
+    var bad=Object.keys(D.status||{}).some(function(k){ return !/^ok/.test(D.status[k]); });
+    if(bad) return Promise.resolve(false);            /* never overwrite a good copy with a partial one */
+    return idb().then(function(db){ return new Promise(function(res){
+      try{ var tx=db.transaction(IDB_STORE,"readwrite"); tx.objectStore(IDB_STORE).put({D:D, savedAt:Date.now()}, SAVE_KEY);
+        tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ res(false); };
+      }catch(e){ res(false); } }); }).catch(function(){ return false; });
+  }
+  /* cheap fingerprint to tell whether fresh data differs from the saved copy */
+  function fingerprint(D){
+    if(!D) return "";
+    var n=function(a){ return a?a.length:0; }, sum=0;
+    (D.tickets||[]).forEach(function(t){ sum+= (t.status||"").length + (t.res||0); });
+    (D.consultsDay||[]).forEach(function(c){ sum+= c.n||0; });
+    (D.audits||[]).forEach(function(a){ sum+= (a.s||0); });
+    return [D.through, n(D.audits), n(D.cancels), n(D.consultsDay), n(D.consultsDoc), n(D.tickets), n(D.orders), Math.round(sum*100)].join("|");
   }
 
   /* ---------- periods ---------- */
@@ -425,6 +506,6 @@
     return out;
   }
 
-  root.APP = { CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, previousOf:previousOf, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
+  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, previousOf:previousOf, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, daysBetween:daysBetween, docKey:docKey, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);
