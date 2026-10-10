@@ -101,6 +101,59 @@
   function legend(items){ return '<div class="legend">'+items.map(function(x){ return '<span><i style="background:'+x[1]+'"></i>'+x[0]+'</span>'; }).join("")+'</div>'; }
   function note(html){ return '<div class="note">'+html+'</div>'; }
 
+  /* ---------- plain-language explainer (bottom of every page) ---------- */
+  var SRC = {
+    audit:"Audit sheets: PDS Audit Sheet, Non Pharma Audit Sheet, PDS-Mounjaro, BS WLP Audits",
+    cancel:"PDS cancellation review sheet",
+    consult:"Total_Consults sheet · Extract 1",
+    tickets:"Ticket sheet · Data tab (Consult, Diagnostics) and Medicine tab (Pharmacy)",
+    orders:"Ticket sheet · Orders tab",
+    calc:"Worked out by the dashboard from the numbers above"
+  };
+  function commonTerms(){
+    var S=APP.CFG.SLA, G=APP.CFG.RAG, H=APP.HIGH;
+    return [
+      ["Consult","One doctor consultation booked on Apollo 24|7. <b>Completed</b> means the consultation actually happened.", SRC.consult],
+      ["Audit","A quality reviewer checks one consult against a checklist and gives it a score. Only about 2&ndash;3% of consults are audited, so audits are a sample.", SRC.audit],
+      ["Audit types","<b>PDS</b>, <b>PDS-Mounjaro</b>, <b>Non Pharma</b> and <b>WLP &ndash; Non Pharma</b> (weight-loss programme) are scored audits. <b>PDS Cancellation</b> reviews check whether a cancelled PDS consult was cancelled for a genuine reason.", SRC.audit],
+      ["Audit score","Points the doctor earned &divide; total points on the checklist, as a %. 100% means every checklist item was done correctly.", SRC.audit],
+      ["Critical error","An audit that scores <b>0%</b>: a must-not-miss item failed, so the whole consult fails. This is the most serious problem on the dashboard.", SRC.audit],
+      ["Ticket","A complaint or escalation a customer raised with customer support. <b>Every</b> ticket is counted (100%), which is why tickets carry more weight than the 2&ndash;3% audit sample.", SRC.tickets],
+      ["High severity ticket","A ticket in a category that can harm the patient or is very serious. Consult: "+H.consult.join(", ")+". Pharmacy: "+H.pharma.join(", ")+". Diagnostics: "+H.diagnostics.join(", ")+".", SRC.tickets],
+      ["Medium severity ticket","Every other ticket category: a real problem for the patient, but not a safety risk.", SRC.tickets],
+      ["Business line","<b>Consult</b> (doctor consultations), <b>Pharmacy</b> (medicine orders) and <b>Diagnostics</b> (lab tests).", SRC.orders],
+      ["Orders","How many orders a business line handled on each day. Tickets are divided by orders so that a busy day and a quiet day can be compared fairly.", SRC.orders],
+      ["Per 1,000 orders","Tickets &divide; orders &times; 1,000. Example: 30 High tickets on 20,000 orders = 1.5 per 1,000. The overall figure is the simple average of the three business lines, so each line counts equally.", SRC.calc],
+      ["Ticket points","A way to add up tickets by seriousness: each High ticket = <b>3</b> points, each Medium ticket = <b>2</b> points.", SRC.calc],
+      ["Deadlines (SLA)","<b>First response</b>: High tickets answered within "+S.High.frt+" h, Medium within "+S.Medium.frt+" h. <b>Resolution</b>: High tickets closed within "+S.High.res+" h, Medium within "+S.Medium.res+" h. These are starting values and can be changed.", SRC.calc],
+      ["First response time / resolution time","Hours from the moment the ticket was raised until support first replied / until the ticket was closed.", SRC.tickets],
+      ["Pending · overdue","<b>Pending</b> = the ticket is still open. <b>Overdue</b> = it has been open longer than its resolution deadline, counted up to the latest data day.", SRC.tickets],
+      ["Period, MTD and comparison","Pick a month with the chips or type your own dates. <b>MTD</b> (month to date) = from the 1st to the latest data day. The comparison is the previous month; for MTD it uses the <b>same days</b> of the previous month, so both sides are the same length.", ""],
+      ["Audit data incomplete ( * )","The audit sheets currently keep audits only from 21 Sep 2026. For earlier periods the audit-based numbers are partial, so those months carry a * and comparisons with them are hidden.", SRC.audit],
+      ["Consult date rule (D-1)","Audits done on a day review the consults of the <b>day before</b>. So when consults or audit leads are counted for a period, they are taken one day earlier.", SRC.consult],
+      ["Colours","Scores: <span class=\"rag green\">&ge; "+G.green+" On track</span> <span class=\"rag amber\">"+G.amber+"&ndash;"+G.green+" Watch</span> <span class=\"rag red\">&lt; "+G.amber+" Action needed</span>. KPIs: green = target met, amber = within 10% of target, red = missed.", ""],
+      ["Arrows &#9650; &#9660;","The change compared with the comparison period. <b>Green = better, red = worse</b>, whichever direction that is (for tickets, going down is green).", ""],
+      ["Data through · Live · Saved copy","<b>Data through</b> is the latest day that has both tickets and orders. <b>Live from Google Sheets</b> means the numbers were just read. <b>Saved copy &middot; refreshing</b> means you are seeing the last reading while a fresh one loads, which takes a few seconds.", ""]
+    ];
+  }
+  function explainHtml(x){
+    if(!x) return "";
+    var h="";
+    if(x.steps && x.steps.length){
+      h+='<div class="section-label"><span class="n">&#9654;</span>Step by step: reading this page from top to bottom</div><div class="xsteps">'+
+        x.steps.map(function(st,i){ return '<div class="xstep"><div class="xno">'+(i+1)+'</div><div><h3>'+st.t+'</h3>'+
+          (st.see?'<p><span class="xl">You see</span>'+st.see+'</p>':'')+(st.mean?'<p><span class="xl">It means</span>'+st.mean+'</p>':'')+(st.look?'<p class="xlook"><span class="xl">Look for</span>'+st.look+'</p>':'')+'</div></div>'; }).join("")+'</div>';
+    }
+    if(x.example){ h+='<div class="section-label"><span class="n">=</span>Worked example with this period&rsquo;s real numbers</div><div class="xexample">'+x.example+'</div>'; }
+    if(x.terms && x.terms.length){
+      h+='<div class="section-label"><span class="n">A&ndash;Z</span>Definitions used on this page</div><div class="panel"><div class="tbl-wrap"><table class="gloss"><thead><tr><th>Term</th><th>What it means (in simple words)</th><th>How it is worked out</th><th>Comes from</th></tr></thead><tbody>'+
+        x.terms.map(function(r){ return '<tr><td><b>'+r[0]+'</b></td><td>'+r[1]+'</td><td>'+(r[2]||"&mdash;")+'</td><td class="xsrc">'+(r[3]||"")+'</td></tr>'; }).join("")+'</tbody></table></div></div>';
+    }
+    h+='<details class="xcommon" open><summary><span class="n">ABC</span>Basic words used on every page <span class="hint">(click to hide or show)</span></summary><div class="xgrid">'+
+      commonTerms().map(function(r){ return '<div class="xterm"><h4>'+r[0]+'</h4><p>'+r[1]+'</p>'+(r[2]?'<p class="xsrc">Source: '+r[2]+'</p>':'')+'</div>'; }).join("")+'</div></details>';
+    return h;
+  }
+
   /* ---------- page shell ---------- */
   function page(opts){
     var here=(location.pathname.split("/").pop()||"index.html"); if(here==="") here="index.html";
@@ -116,7 +169,8 @@
       '<div class="dates"><input type="date" id="dFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="dTo" aria-label="To"></div>'+
       '<span class="range" id="rangeLabel"></span></div>'+
       '<div id="notes"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
-      (opts.guide?'<div class="section-label"><span class="n">?</span>How to read this page</div><div class="howto">'+opts.guide+'</div>':'')+
+      (opts.guide?'<div class="section-label"><span class="n">?</span>How to read this page &middot; in short</div><div class="howto">'+opts.guide+'</div>':'')+
+      '<div id="explain"></div>'+
       '<footer><b style="color:var(--ink)">Page '+(idx+1)+' of 10.</b> All numbers are read live from the Google Sheets each time the page opens (a saved copy is shown instantly while the live read finishes). Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
       'Ticket data starts August 2026; the PDS and Non Pharma audit sheets currently keep audits from 21 Sep 2026 onwards, so earlier audit numbers are partial.</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap"; wrap.innerHTML=shell; document.body.appendChild(wrap);
@@ -143,6 +197,7 @@
       var y=root.scrollY||0;
       try{ document.getElementById("content").innerHTML=opts.render(ctx); }catch(err){ document.getElementById("content").innerHTML='<div class="panel empty">Could not draw this page: '+esc(err.message)+'</div>'; if(root.console) console.error(err); }
       wireCharts(); if(opts.after) opts.after(ctx);
+      try{ document.getElementById("explain").innerHTML = explainHtml(opts.explain ? opts.explain(ctx) : {}); }catch(err){ document.getElementById("explain").innerHTML=explainHtml({}); if(root.console) console.error(err); }
       if(y) root.scrollTo(0,y);
     }
     function saveRange(){ try{ localStorage.setItem("cc10_range", JSON.stringify(RANGE)); }catch(e){} }
@@ -182,5 +237,5 @@
     });
   }
 
-  root.UI = { page:page, esc:esc, fi:fi, f1:f1, ragLabel:ragLabel, delta:delta, meter:meter, gauge:gauge, spark:spark, lineChart:lineChart, legend:legend, note:note, PAGES:PAGES };
+  root.UI = { SRC:SRC, page:page, esc:esc, fi:fi, f1:f1, ragLabel:ragLabel, delta:delta, meter:meter, gauge:gauge, spark:spark, lineChart:lineChart, legend:legend, note:note, PAGES:PAGES };
 })(window);
