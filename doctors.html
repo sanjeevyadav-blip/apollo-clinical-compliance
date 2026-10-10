@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doctor League · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+var DOCS=null, PREV={}, SORT={k:"score",dir:1};
+function drawTable(){
+  var f1=UI.f1, fi=UI.fi, esc=UI.esc;
+  var ft=document.getElementById("fType").value, fs=document.getElementById("fStatus").value, q=(document.getElementById("fSearch").value||"").toLowerCase(), fr=document.getElementById("fRanked").checked;
+  var rows=DOCS.filter(function(d){ return (!fr||d.ranked) && (ft==="all"||d.dtype===ft) && (fs==="all"||d.status===fs) && (!q||d.name.toLowerCase().indexOf(q)!==-1||d.spec.toLowerCase().indexOf(q)!==-1); });
+  rows.sort(function(a,b){ var k=SORT.k, x=a[k], y=b[k]; if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1; if(typeof x==="string") return SORT.dir*(x<y?-1:x>y?1:0); return SORT.dir*(x-y); });
+  var ST={review:"Review: critical error",watch:"Watch: below "+APP.CFG.DOCTOR.compliant,ok:"Compliant",none:"No score"};
+  document.getElementById("docBody").innerHTML = rows.length ? rows.map(function(d,i){ var p=PREV[d.key];
+    return '<tr><td class="num">'+(i+1)+'</td><td><b>'+esc(d.name)+'</b></td><td>'+esc(d.dtype)+'</td><td class="wrap" style="min-width:110px;max-width:160px">'+esc(d.spec)+'</td><td class="num">'+fi(d.scored)+'</td>'+
+      '<td class="num">'+UI.meter(d.avg,1,d.avg<90?'warn':'',100,'%')+'</td><td class="num">'+(d.zero?'<b style="color:var(--crit)">'+d.zero+'</b>':'0')+'</td><td class="num">'+f1(d.fulfil)+(d.fulfil==null?'':'%')+'</td><td class="num">'+(d.cancels?d.notGenuine+' / '+d.cancels:'—')+'</td>'+
+      '<td class="num"><b>'+f1(d.score)+'</b></td><td class="num">'+(p&&p.score!=null?UI.delta(d.score,p.score,1,true):'—')+'</td><td><span class="tag '+d.status+'">'+ST[d.status]+'</span></td></tr>'; }).join("") : '<tr><td colspan="12" class="empty">No doctors match these filters.</td></tr>';
+  document.getElementById("docCount").textContent = rows.length+" doctors shown";
+}
+UI.page({
+  title: "Clinical Compliance · Doctor League",
+  subtitle: "Page 5 · a compliance score for every audited doctor",
+  intro: "Each doctor gets a score from their audit quality (60%), consult fulfilment (25%) and genuine PDS cancellations (15%). Any critical error puts the doctor on review. Only doctors with at least 3 scored audits are ranked.",
+  render: function(c){
+    var f1=UI.f1, fi=UI.fi, esc=UI.esc, C=APP.CFG.DOCTOR;
+    DOCS=APP.doctors(c.D,c.s,c.e); PREV={};
+    if(c.PM){ APP.doctors(c.D,c.pv.start,c.pv.end).forEach(function(d){ if(d.ranked) PREV[d.key]=d; }); }
+    var ranked=DOCS.filter(function(d){ return d.ranked; }), ok=ranked.filter(function(d){ return d.status==="ok"; }), rev=DOCS.filter(function(d){ return d.status==="review"; }), watch=ranked.filter(function(d){ return d.status==="watch"; });
+    var pct=ranked.length?ok.length/ranked.length*100:null, rag=APP.rag(pct);
+    var h='<div class="kpi-grid"><div class="stat '+rag+'"><div class="l">Doctors compliant</div><div class="v">'+f1(pct,0)+'<small>%</small></div><div class="s">'+ok.length+' of '+ranked.length+' ranked doctors score &ge; '+C.compliant+' with no critical error</div></div>'+
+      '<div class="stat red"><div class="l">On review (critical error)</div><div class="v">'+rev.length+'</div><div class="s">doctors with at least one zero-score audit</div></div>'+
+      '<div class="stat amber"><div class="l">Watchlist</div><div class="v">'+watch.length+'</div><div class="s">ranked doctors scoring below '+C.compliant+'</div></div>'+
+      '<div class="stat"><div class="l">Doctors audited</div><div class="v">'+fi(DOCS.length)+'</div><div class="s">'+ranked.length+' with &ge; '+C.minAudits+' scored audits (ranked)</div></div></div>';
+    /* histogram */
+    var bins=[[0,60],[60,70],[70,80],[80,85],[85,90],[90,95],[95,101]], cnt=bins.map(function(b){ return ranked.filter(function(d){ return d.score!=null&&d.score>=b[0]&&d.score<b[1]; }).length; }), mx=Math.max.apply(null,cnt.concat([1]));
+    h+='<div class="grid2" style="margin-top:18px"><div class="panel"><h2>How doctors are spread</h2><p class="desc">Ranked doctors by score band.</p><div style="display:flex;align-items:flex-end;gap:8px;height:170px;padding-top:10px">'+
+      bins.map(function(b,i){ var col=b[0]>=85?"var(--band-green)":(b[0]>=75||b[0]>=80?"var(--band-amber)":"var(--band-red)"); if(b[0]===80) col="var(--band-amber)"; if(b[0]<75) col="var(--band-red)";
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end"><span style="font-family:var(--font-mono);font-size:12px;font-weight:700">'+cnt[i]+'</span><div title="'+cnt[i]+' doctors" style="width:100%;height:'+(cnt[i]/mx*120).toFixed(0)+'px;min-height:3px;background:'+col+';border-radius:4px 4px 0 0"></div><span style="font-size:10.5px;color:var(--ink-soft)">'+(b[1]>100?"95–100":b[0]+"–"+b[1])+'</span></div>'; }).join("")+'</div></div>';
+    var improved=!c.auditCmp?[]:ranked.filter(function(d){ return PREV[d.key]&&PREV[d.key].score!=null&&d.score!=null; }).map(function(d){ return {d:d, diff:d.score-PREV[d.key].score}; }).sort(function(a,b){ return b.diff-a.diff; });
+    h+='<div class="panel"><h2>Movers vs '+(c.PM?esc(c.pv.label):'previous period')+'</h2><p class="desc">Ranked doctors in both periods.</p>'+
+      (improved.length?'<div class="tbl-wrap"><table><thead><tr><th>Most improved</th><th class="num">Change</th><th>Most declined</th><th class="num">Change</th></tr></thead><tbody>'+[0,1,2,3,4].map(function(i){ var u=improved[i], d=improved[improved.length-1-i];
+        return '<tr><td>'+(u&&u.diff>0?esc(u.d.name):'')+'</td><td class="num">'+(u&&u.diff>0?'<span class="delta up">+'+f1(u.diff)+'</span>':'')+'</td><td>'+(d&&d.diff<0?esc(d.d.name):'')+'</td><td class="num">'+(d&&d.diff<0?'<span class="delta down">'+f1(d.diff)+'</span>':'')+'</td></tr>'; }).join("")+'</tbody></table></div>':'<div class="empty">'+(c.PM&&!c.auditCmp?'No like-for-like comparison: '+esc(c.pv.label)+' audit data is incomplete.':'No comparison period with ranked doctors.')+'</div>')+'</div></div>';
+    var types=Array.from(new Set(DOCS.map(function(d){ return d.dtype; }))).sort();
+    h+='<div class="section-label"><span class="n">01</span>Doctor table</div><div class="panel"><div class="filters"><span class="lbl">Doctor type</span><select id="fType"><option value="all">All</option>'+types.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("")+'</select>'+
+      '<span class="lbl">Status</span><select id="fStatus"><option value="all">All</option><option value="review">Review (critical error)</option><option value="watch">Watchlist</option><option value="ok">Compliant</option></select>'+
+      '<label style="font-size:12px;display:flex;gap:5px;align-items:center"><input type="checkbox" id="fRanked" checked> Ranked only (&ge; '+C.minAudits+' audits)</label><input id="fSearch" placeholder="Search doctor or specialty" style="min-width:200px"><span id="docCount" style="font-size:11.5px;color:var(--ink-soft);margin-left:auto"></span></div>'+
+      '<div class="tbl-wrap scroll-tbl"><table id="docTbl"><thead><tr><th>#</th><th class="s" data-k="name" style="cursor:pointer">Doctor ⇅</th><th class="s" data-k="dtype" style="cursor:pointer">Type ⇅</th><th class="s" data-k="spec" style="cursor:pointer">Specialty ⇅</th><th class="num s" data-k="scored" style="cursor:pointer">Audits ⇅</th><th class="num s" data-k="avg" style="cursor:pointer">Avg score ⇅</th><th class="num s" data-k="zero" style="cursor:pointer">Critical ⇅</th><th class="num s" data-k="fulfil" style="cursor:pointer">Fulfilment ⇅</th><th class="num">Not-genuine cancels</th><th class="num s" data-k="score" style="cursor:pointer">Score ⇅</th><th class="num">vs prev</th><th>Status</th></tr></thead><tbody id="docBody"></tbody></table></div>'+
+      '<p class="cfg-note">Score = 60% average audit score + 25% consult fulfilment (completed ÷ all consults, from Extract 1) + 15% genuine-cancellation rate (PDS cancellation reviews); parts with no data are left out. Patient tickets carry no doctor name, so they cannot be included here.</p></div>';
+    return h;
+  },
+  after: function(){
+    ["fType","fStatus","fRanked"].forEach(function(id){ document.getElementById(id).addEventListener("change", drawTable); });
+    document.getElementById("fSearch").addEventListener("input", drawTable);
+    Array.prototype.forEach.call(document.querySelectorAll("#docTbl th.s"), function(th){ th.addEventListener("click", function(){ var k=th.dataset.k; SORT = SORT.k===k ? {k:k,dir:-SORT.dir} : {k:k,dir:(k==="name"||k==="dtype"||k==="spec"||k==="score"||k==="avg"||k==="fulfil")?1:-1}; drawTable(); }); });
+    drawTable();
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Doctor score</h3><p>60% average audit score, 25% consult fulfilment (share of the doctor\'s consults that were completed) and 15% genuine cancellations. Compliant = score &ge; 85 and no critical error.</p><p class="why">One fair number per doctor for coaching and reviews.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Status tags</h3><p><span class="tag review">Review</span> at least one zero-score audit in the period; <span class="tag watch">Watch</span> score below 85; <span class="tag ok">Compliant</span> on track. Doctors with fewer than 3 audits are listed but not ranked.</p><p class="why">Medical leadership knows exactly who to talk to first.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Using the table</h3><p>Filter by doctor type or status, search by name or specialty, and click a column heading to sort. The default sort puts the lowest scores at the top.</p><p class="why">Find the doctors who need support in seconds.</p></div>'
+});
+
+</script>
+</body>
+</html>

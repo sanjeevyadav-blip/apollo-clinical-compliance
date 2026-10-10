@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checklist Standards · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+var CTX=null, TH=90;
+function drawStd(){
+  var c=CTX, f1=UI.f1, fi=UI.fi, esc=UI.esc;
+  var proj=document.getElementById("sProj").value, dt=document.getElementById("sType").value;
+  var filt = dt==="all" ? null : function(a){ return a.dtype===dt; };
+  var P=APP.parameters(c.D,c.s,c.e,filt)[proj]||[], PP=c.PM?(APP.parameters(c.D,c.pv.start,c.pv.end,filt)[proj]||[]):[], pm={};
+  PP.forEach(function(x){ pm[x.group+"|"+x.name]=x; });
+  var groups={}; P.forEach(function(x){ (groups[x.group]=groups[x.group]||[]).push(x); });
+  var h='<div class="tbl-wrap"><table><thead><tr><th>Checklist item</th><th class="num">Points</th><th class="num">Audits</th><th class="num">Compliance</th><th class="num">Full marks</th><th class="num">vs prev</th><th>Standard</th></tr></thead><tbody>';
+  Object.keys(groups).forEach(function(g){
+    var arr=groups[g], gp=arr.reduce(function(a,x){ return a+(x.pct||0)*x.max; },0)/arr.reduce(function(a,x){ return a+x.max; },0);
+    h+='<tr><td colspan="7" style="background:var(--surface-2);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">'+esc(g)+' · '+f1(gp)+'% weighted compliance</td></tr>';
+    arr.forEach(function(x){ var p=pm[x.group+"|"+x.name]; var met=x.pct>=TH;
+      h+='<tr><td class="wrap" style="min-width:280px">'+esc(x.name)+'</td><td class="num">'+fi(x.max)+'</td><td class="num">'+fi(x.n)+'</td><td class="num">'+UI.meter(x.pct,1,x.pct<75?'crit':(x.pct<TH?'warn':''))+'</td><td class="num">'+f1(x.fullPct)+'%</td><td class="num">'+(p&&c.auditCmp?UI.delta(x.pct,p.pct,1,true):'—')+'</td><td><span class="pill-st '+(met?'green':(x.pct>=75?'amber':'red'))+'">'+(met?'Met':(x.pct>=75?'Partly met':'Not met'))+'</span></td></tr>'; });
+  });
+  h+='</tbody></table></div>';
+  document.getElementById("stdTable").innerHTML = P.length ? h : '<div class="empty">No parameter scores for this selection.</div>';
+}
+UI.page({
+  title: "Clinical Compliance · Checklist Standards",
+  subtitle: "Page 7 · compliance with each item of the audit checklist (NABH-style)",
+  intro: "Every audit checklist item is treated as a standard. Compliance = points scored ÷ points possible across all audits. An item is 'met' at 90% or more. Use this page to target training at the exact behaviours doctors miss.",
+  render: function(c){
+    CTX=c; var f1=UI.f1, fi=UI.fi, esc=UI.esc;
+    var all=APP.parameters(c.D,c.s,c.e), flat=[]; Object.keys(all).forEach(function(t){ all[t].forEach(function(x){ flat.push(x); }); });
+    var met=flat.filter(function(x){ return x.pct>=TH; }).length, pct=flat.length?met/flat.length*100:null;
+    var worst=flat.slice().sort(function(a,b){ return a.pct-b.pct; }).slice(0,10);
+    var h='<div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))"><div class="stat '+APP.rag(pct)+'"><div class="l">Standards met (&ge; '+TH+'%)</div><div class="v">'+f1(pct,0)+'<small>%</small></div><div class="s">'+met+' of '+flat.length+' checklist items across 4 audit types</div></div>';
+    Object.keys(all).forEach(function(t){ var a=all[t], m=a.filter(function(x){ return x.pct>=TH; }).length, pp=a.length?m/a.length*100:null;
+      h+='<div class="stat '+APP.rag(pp)+'"><div class="l">'+esc(t)+'</div><div class="v">'+m+'<small>/'+a.length+'</small></div><div class="s">items met · lowest: '+esc((a.slice().sort(function(x,y){ return x.pct-y.pct; })[0]||{}).name||"—").slice(0,48)+'</div></div>'; });
+    h+='</div>';
+    h+='<div class="section-label"><span class="n">01</span>Ten most-missed checklist items</div><div class="panel"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Checklist item</th><th>Audit type</th><th>Group</th><th class="num">Audits</th><th class="num">Compliance</th></tr></thead><tbody>'+
+      worst.map(function(x,i){ return '<tr><td class="num">'+(i+1)+'</td><td class="wrap" style="min-width:260px"><b>'+esc(x.name)+'</b></td><td>'+esc(x.type)+'</td><td>'+esc(x.group)+'</td><td class="num">'+fi(x.n)+'</td><td class="num">'+UI.meter(x.pct,1,x.pct<75?'crit':'warn')+'</td></tr>'; }).join("")+'</tbody></table></div></div>';
+    var types=Array.from(new Set(c.D.audits.filter(function(a){ return a.a&&a.a>=c.s&&a.a<=c.e; }).map(function(a){ return a.dtype; }))).sort();
+    h+='<div class="section-label"><span class="n">02</span>Full checklist</div><div class="panel"><div class="filters"><span class="lbl">Audit type</span><select id="sProj">'+Object.keys(all).map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("")+'</select>'+
+      '<span class="lbl">Doctor type</span><select id="sType"><option value="all">All</option>'+types.map(function(t){ return '<option>'+esc(t)+'</option>'; }).join("")+'</select></div><div id="stdTable"></div>'+
+      '<p class="cfg-note">Compliance = points scored ÷ points possible on that item. "Full marks" = share of audits where the item got its full points. Met &ge; '+TH+'%, partly met 75–90%, not met &lt; 75%.</p></div>';
+    return h;
+  },
+  after: function(){ document.getElementById("sProj").addEventListener("change", drawStd); document.getElementById("sType").addEventListener("change", drawStd); drawStd(); },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Standards</h3><p>Each line of the audit checklist (for example doctor introduction, history of past illness, red-flag advice, prescription hygiene) is a standard. Compliance is the share of its points scored across all audits.</p><p class="why">Pinpoints the exact behaviours behind the audit score.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Met / partly / not met</h3><p><span class="pill-st green">Met</span> 90% or more, <span class="pill-st amber">Partly met</span> 75–90%, <span class="pill-st red">Not met</span> below 75%. The headline counts how many items are met.</p><p class="why">The same language accreditation bodies use.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Using it</h3><p>Start with the ten most-missed items, then filter the full checklist by audit type and doctor type to see who misses what.</p><p class="why">Lets training focus on the few items that move the score.</p></div>'
+});
+
+</script>
+</body>
+</html>

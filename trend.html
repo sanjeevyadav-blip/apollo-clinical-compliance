@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trend & Control · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+UI.page({
+  title: "Clinical Compliance · Trend & Control",
+  subtitle: "Page 8 · is compliance improving, and which days or weeks were unusual?",
+  intro: "The operations view. Weekly trends show direction; control charts show the normal range (average ± 3 standard deviations) so that only genuinely unusual days or weeks are flagged in red. The index compares each week with the August baseline (= 100).",
+  render: function(c){
+    var D=c.D, f1=UI.f1, fi=UI.fi, esc=UI.esc, G=APP.CFG.RAG, U=APP.util;
+    var wk=APP.weeks(APP.CFG.FIRST_MONTH+"-01", D.through), W=wk.map(function(w){ return {w:w, m:APP.metrics(D,w.start,w.end)}; });
+    var labels=W.map(function(x){ return U.shortDate(x.w.start); }), inc=W.map(function(x){ return x.m.audit.incomplete; });
+    /* daily ticket points per 1,000 orders (pooled) */
+    var byDay={}; D.orders.forEach(function(o){ if(o.date<APP.CFG.FIRST_MONTH+"-01"||o.date>D.through) return; var r=byDay[o.date]||(byDay[o.date]={o:0,p:0,n:0}); r.o+=o.orders; });
+    D.tickets.forEach(function(t){ var r=byDay[t.date]; if(!r) return; r.p+=t.sev==="High"?3:2; r.n++; });
+    var days=Object.keys(byDay).sort().filter(function(d){ return d<D.through; }), dv=days.map(function(d){ var r=byDay[d]; return r.o? r.p/r.o*1000 : null; });
+    var vv=dv.filter(function(v){ return v!=null; }), mean=vv.reduce(function(a,b){return a+b;},0)/(vv.length||1), sd=Math.sqrt(vv.reduce(function(a,b){ return a+(b-mean)*(b-mean); },0)/(vv.length||1));
+    var ucl=mean+3*sd, lcl=Math.max(0,mean-3*sd), flags=dv.map(function(v){ return v!=null&&(v>ucl||v<lcl); }), nFlag=flags.filter(Boolean).length;
+    /* weekly critical-error % (complete weeks only) */
+    var crit=W.map(function(x){ return x.m.audit.incomplete?null:x.m.audit.criticalPct; }), cv=crit.filter(function(v){ return v!=null; });
+    var cm=cv.reduce(function(a,b){return a+b;},0)/(cv.length||1), csd=Math.sqrt(cv.reduce(function(a,b){ return a+(b-cm)*(b-cm); },0)/(cv.length||1)), cu=cm+3*csd;
+    /* index vs August */
+    var aug=APP.metrics(D,APP.CFG.FIRST_MONTH+"-01",APP.util.addDaysIso(APP.CFG.FIRST_MONTH+"-01",30));
+    var base={ticket:(aug.tickets.highPer1k*3+aug.tickets.medPer1k*2)};
+    var idx=W.map(function(x){ var t=x.m.tickets, v=(t.highPer1k||0)*3+(t.medPer1k||0)*2; return base.ticket? v/base.ticket*100 : null; });
+    var lastIdx=idx[idx.length-1];
+    var h='<div class="kpi-grid"><div class="stat '+(lastIdx<=100?'green':'red')+'"><div class="l">Ticket index, latest week</div><div class="v">'+f1(lastIdx,0)+'</div><div class="s">August = 100; lower is better ('+(lastIdx<=100?f1(100-lastIdx,0)+'% better':f1(lastIdx-100,0)+'% worse')+')</div></div>'+
+      '<div class="stat '+(nFlag?'amber':'green')+'"><div class="l">Unusual days (90 days)</div><div class="v">'+nFlag+'</div><div class="s">days outside the normal range for ticket points</div></div>'+
+      '<div class="stat"><div class="l">Normal daily range</div><div class="v" style="font-size:22px">'+f1(lcl,1)+'–'+f1(ucl,1)+'</div><div class="s">ticket points per 1,000 orders (average '+f1(mean,1)+')</div></div>'+
+      '<div class="stat"><div class="l">Penalty score, latest week</div><div class="v">'+f1(W[W.length-1].m.penalty)+'</div><div class="s">'+(inc[inc.length-1]?'audit data incomplete':'week of '+labels[labels.length-1])+'</div></div></div>';
+    h+='<div class="section-label"><span class="n">01</span>Weekly scores</div><div class="panel">'+UI.lineChart("w1",labels,[
+        {name:"Penalty score (page 1)", color:"var(--accent)", vals:W.map(function(x){ return x.m.penalty; }), dashed:inc},
+        {name:"Five-pillar score (page 2)", color:"#7A5AF8", vals:W.map(function(x){ return x.m.pillars.overall; }), dashed:inc}],
+      {w:1180,h:300,min:50,max:100,bands:[{from:G.green,to:100,color:"var(--band-green)"},{from:G.amber,to:G.green,color:"var(--band-amber)",op:.11},{from:50,to:G.amber,color:"var(--band-red)",op:.07}]})+
+      UI.legend([["Penalty score","var(--accent)"],["Five-pillar score","#7A5AF8"],["Dashed/hollow = audit data incomplete","var(--surface)"]])+'</div>';
+    h+='<div class="section-label"><span class="n">02</span>Control chart · daily ticket points per 1,000 orders</div><div class="panel"><p class="desc">Each dot is one day: (3 × High + 2 × Medium tickets) ÷ orders × 1,000 across all business lines. Red dots are outside the normal range (average ± 3 standard deviations) and are worth investigating. The latest day ('+U.shortDate(D.through)+') is left out because its tickets are still coming in.</p>'+
+      UI.lineChart("w2",days.map(function(d){ return U.shortDate(d); }),[{name:"Points per 1,000 orders", color:"var(--sev-high)", vals:dv, flags:flags}],{w:1180,h:300,min:0,lines:[{v:mean,color:"var(--ink-soft)",label:"average "+f1(mean,1)},{v:ucl,color:"var(--band-red)",label:"upper limit "+f1(ucl,1)}].concat(lcl>0?[{v:lcl,color:"var(--band-red)",label:"lower limit "+f1(lcl,1)}]:[])})+'</div>';
+    h+='<div class="grid2"><div><div class="section-label"><span class="n">03</span>Critical-error rate by week</div><div class="panel"><p class="desc">% of audits scoring 0, complete weeks only. Dashed line = upper control limit.</p>'+
+      UI.lineChart("w3",labels,[{name:"Critical-error %", color:"var(--sev-critical)", vals:crit, flags:crit.map(function(v){ return v!=null&&v>cu; })}],{min:0,lines:[{v:cm,color:"var(--ink-soft)",label:"avg "+f1(cm,2)},{v:cu,color:"var(--band-red)",label:"limit "+f1(cu,2)}],fmt:function(v){ return f1(v,2)+"%"; }})+'</div></div>';
+    h+='<div><div class="section-label"><span class="n">04</span>Ticket index vs August</div><div class="panel"><p class="desc">Weighted ticket rate each week ÷ August average × 100. Below 100 = better than August.</p>'+
+      UI.lineChart("w4",labels,[{name:"Ticket index", color:"var(--accent)", vals:idx}],{lines:[{v:100,color:"var(--ink-soft)",label:"August = 100"}],fmt:function(v){ return f1(v,0); }})+'</div></div></div>';
+    h+='<div class="section-label"><span class="n">05</span>Week-by-week table</div><div class="panel"><div class="tbl-wrap scroll-tbl"><table><thead><tr><th>Week</th><th class="num">Penalty score</th><th class="num">Pillar score</th><th class="num">Audit score</th><th class="num">Critical %</th><th class="num">High / 1k</th><th class="num">Medium / 1k</th><th class="num">Ticket index</th><th class="num">Answered in time</th></tr></thead><tbody>'+
+      W.map(function(x,i){ var m=x.m; return '<tr><td>'+labels[i]+(inc[i]?' <span class="tag">audit partial</span>':'')+'</td><td class="num"><b>'+f1(m.penalty)+'</b></td><td class="num">'+f1(m.pillars.overall)+'</td><td class="num">'+f1(m.audit.score)+'%</td><td class="num">'+f1(m.audit.criticalPct,2)+'</td><td class="num">'+f1(m.tickets.highPer1k,2)+'</td><td class="num">'+f1(m.tickets.medPer1k,2)+'</td><td class="num">'+f1(idx[i],0)+'</td><td class="num">'+f1(m.tickets.frtSlaPct)+'%</td></tr>'; }).reverse().join("")+'</tbody></table></div></div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Trend lines</h3><p>Weekly penalty score (page 1) and five-pillar score (page 2). Hollow points are weeks where the audit sheets no longer hold all audits.</p><p class="why">Shows direction, not just a single month.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Control charts</h3><p>The grey line is the average; the red dashed lines are the normal limits (average ± 3 standard deviations). Points outside them are red and unlikely to be chance.</p><p class="why">Stops over-reacting to normal ups and downs, and catches real spikes early.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Index</h3><p>August = 100. A ticket index of 90 means 10% fewer weighted tickets per order than August.</p><p class="why">One simple way to show the board the effect of improvement work.</p></div>'
+});
+
+</script>
+</body>
+</html>

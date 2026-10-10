@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action Tracker · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+UI.page({
+  title: "Clinical Compliance · Action Tracker",
+  subtitle: "Page 10 · only the items that need someone to act",
+  intro: "The working page for the operations huddle. Open tickets and the audit backlog are shown as of the latest data day; critical-error audits and the doctor watchlist follow the period you pick.",
+  render: function(c){
+    var D=c.D, f1=UI.f1, fi=UI.fi, esc=UI.esc, U=APP.util, now=D.through, SLA=APP.CFG.SLA, BL={consult:"Consult",pharma:"Pharmacy",diagnostics:"Diagnostics"};
+    var pend=D.tickets.filter(function(t){ return /pending|open/i.test(t.status) && t.date>=APP.CFG.FIRST_MONTH+"-01"; }).map(function(t){ var age=U.daysBetween(t.date,now); return {t:t, age:age, over: age*24>SLA[t.sev].res}; });
+    var over=pend.filter(function(x){ return x.over; }).sort(function(a,b){ return (a.t.sev===b.t.sev?0:(a.t.sev==="High"?-1:1)) || b.age-a.age; });
+    var crit=D.audits.filter(function(a){ return a.a && a.a>=c.s && a.a<=c.e && a.s===0; }).sort(function(a,b){ return a.a<b.a?1:-1; });
+    var lim=U.addDaysIso(now,-30), backlog=D.audits.filter(function(a){ return !a.a && a.p && a.p>=lim && a.p<=now; }).map(function(a){ return {a:a, age:U.daysBetween(a.p,now)}; });
+    var docs=APP.doctors(D,c.s,c.e).filter(function(d){ return d.status==="review" || (d.ranked && d.status==="watch"); }).sort(function(a,b){ return (a.status===b.status?0:(a.status==="review"?-1:1)) || (a.score||0)-(b.score||0); });
+    var bl3=backlog.filter(function(x){ return x.age>3; }).length;
+    var total=crit.length+over.length+bl3+docs.filter(function(d){ return d.status==="review"; }).length;
+    var T=c.M.tickets;
+    var h='<div class="kpi-grid"><div class="stat red"><div class="l">Overdue tickets (now)</div><div class="v">'+fi(over.length)+'</div><div class="s">'+fi(over.filter(function(x){ return x.t.sev==="High"; }).length)+' High · pending past their resolution deadline</div></div>'+
+      '<div class="stat red"><div class="l">Critical audits to review</div><div class="v">'+fi(crit.length)+'</div><div class="s">zero-score audits in '+esc(c.p.label)+'</div></div>'+
+      '<div class="stat amber"><div class="l">Leads not audited &gt; 3 days</div><div class="v">'+fi(bl3)+'</div><div class="s">'+fi(backlog.length)+' populated leads from the last 30 days still without an audit</div></div>'+
+      '<div class="stat '+APP.rag(T.resSlaPct)+'"><div class="l">Resolved within deadline</div><div class="v">'+f1(T.resSlaPct,0)+'<small>%</small></div><div class="s">answered in time '+f1(T.frtSlaPct,0)+'% · '+esc(c.p.label)+'</div></div></div>';
+    /* ageing */
+    var buckets=[["0–1 day",0,1],["2–3 days",2,3],["4–7 days",4,7],["8–14 days",8,14],["15+ days",15,9999]];
+    h+='<div class="section-label"><span class="n">01</span>Pending tickets by age (as of '+U.dateLabel(now)+')</div><div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Business line</th>'+buckets.map(function(b){ return '<th class="num">'+b[0]+'</th>'; }).join("")+'<th class="num">Total pending</th><th class="num">Overdue</th></tr></thead><tbody>'+
+      ["consult","pharma","diagnostics"].map(function(k){ var p=pend.filter(function(x){ return x.t.bu===k; });
+        return '<tr><td><b>'+BL[k]+'</b></td>'+buckets.map(function(b,i){ var n=p.filter(function(x){ return x.age>=b[1]&&x.age<=b[2]; }).length; return '<td class="num"'+(i>=2&&n?' style="color:var(--crit);font-weight:700"':'')+'>'+fi(n)+'</td>'; }).join("")+'<td class="num"><b>'+fi(p.length)+'</b></td><td class="num">'+fi(p.filter(function(x){ return x.over; }).length)+'</td></tr>'; }).join("")+
+      '</tbody></table></div><p class="cfg-note">Overdue = still pending after the resolution deadline (High '+SLA.High.res+' h, Medium '+SLA.Medium.res+' h).</p></div>';
+    h+='<div class="grid2"><div><div class="section-label"><span class="n">02</span>Oldest overdue tickets</div><div class="panel"><div class="tbl-wrap scroll-tbl"><table><thead><tr><th>Ticket</th><th>Raised</th><th>Line</th><th>Category</th><th>Severity</th><th class="num">Age (days)</th></tr></thead><tbody>'+
+      (over.length?over.slice(0,60).map(function(x){ return '<tr><td style="font-family:var(--font-mono);font-size:11.5px">'+esc(x.t.id)+'</td><td>'+U.shortDate(x.t.date)+'</td><td>'+BL[x.t.bu]+'</td><td class="wrap" style="min-width:150px">'+esc(x.t.cat)+'</td><td><span class="sev '+x.t.sev+'">'+x.t.sev+'</span></td><td class="num"><b>'+x.age+'</b></td></tr>'; }).join(""):'<tr><td colspan="6" class="empty">No overdue tickets.</td></tr>')+
+      '</tbody></table></div>'+(over.length>60?'<p class="desc" style="margin:8px 0 0">Showing the 60 most urgent of '+fi(over.length)+'.</p>':'')+'</div></div>';
+    h+='<div><div class="section-label"><span class="n">03</span>Critical-error audits to review</div><div class="panel"><div class="tbl-wrap scroll-tbl"><table><thead><tr><th>Audit date</th><th>Doctor</th><th>Type</th><th>Auditor</th></tr></thead><tbody>'+
+      (crit.length?crit.map(function(a){ return '<tr><td>'+U.shortDate(a.a)+'</td><td><b>'+esc(a.doc)+'</b><div style="font-size:10.5px;color:var(--ink-soft)">'+esc(a.dtype)+'</div></td><td>'+esc(a.type)+'</td><td>'+esc(a.au)+'</td></tr>'; }).join(""):'<tr><td colspan="4" class="empty">No critical-error audits in this period.</td></tr>')+'</tbody></table></div></div></div></div>';
+    h+='<div class="grid2"><div><div class="section-label"><span class="n">04</span>Audit leads waiting (populated, not yet audited)</div><div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Audit type</th><th class="num">0–1 day</th><th class="num">2–3 days</th><th class="num">4–7 days</th><th class="num">8+ days</th><th class="num">Total</th></tr></thead><tbody>'+
+      APP.SCORED.map(function(t){ var b=backlog.filter(function(x){ return x.a.type===t; }); function n(lo,hi){ return b.filter(function(x){ return x.age>=lo&&x.age<=hi; }).length; }
+        return '<tr><td><b>'+esc(t)+'</b></td><td class="num">'+fi(n(0,1))+'</td><td class="num">'+fi(n(2,3))+'</td><td class="num">'+fi(n(4,7))+'</td><td class="num"'+(n(8,99)?' style="color:var(--crit);font-weight:700"':'')+'>'+fi(n(8,99))+'</td><td class="num"><b>'+fi(b.length)+'</b></td></tr>'; }).join("")+
+      '</tbody></table></div><p class="cfg-note">Leads = rows populated in the audit sheets with an appointment in the last 30 days but no audit date yet. Age is days since the appointment. Not every populated lead is meant to be audited, so read this as the pool waiting, not as missed work.</p></div></div>';
+    h+='<div><div class="section-label"><span class="n">05</span>Doctor watchlist</div><div class="panel"><div class="tbl-wrap scroll-tbl"><table><thead><tr><th>Doctor</th><th>Status</th><th class="num">Audits</th><th class="num">Critical</th><th class="num">Score</th></tr></thead><tbody>'+
+      (docs.length?docs.slice(0,40).map(function(d){ return '<tr><td><b>'+esc(d.name)+'</b><div style="font-size:10.5px;color:var(--ink-soft)">'+esc(d.dtype)+'</div></td><td><span class="tag '+d.status+'">'+(d.status==="review"?"Review":"Watch")+'</span></td><td class="num">'+fi(d.scored)+'</td><td class="num">'+(d.zero||0)+'</td><td class="num">'+f1(d.score)+'</td></tr>'; }).join(""):'<tr><td colspan="5" class="empty">No doctors on the watchlist.</td></tr>')+'</tbody></table></div><p class="desc" style="margin:8px 0 0">Full list and filters on <a href="doctors.html">Page 5 · Doctor League</a>.</p></div></div></div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>What counts as an action</h3><p>Tickets still pending after their deadline, zero-score audits that need a clinical review, audit leads waiting more than 3 days, and doctors on review or watch.</p><p class="why">Keeps the daily huddle focused on what can be fixed today.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Ageing tables</h3><p>Pending tickets and un-audited leads split by how many days they have waited. Red numbers are the older buckets that need chasing first.</p><p class="why">Old items are the ones patients and regulators notice.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Deadlines</h3><p>High tickets: answer within 2 h and resolve within 24 h. Medium: 4 h and 72 h. These are starting values and can be changed to your agreed service levels.</p><p class="why">Overdue counts are only as good as the agreed deadlines.</p></div>'
+});
+
+</script>
+</body>
+</html>

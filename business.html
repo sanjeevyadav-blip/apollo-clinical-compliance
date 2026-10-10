@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Business Lines · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+function buScores(M){
+  return M.tickets.lines.map(function(b){
+    var parts=[]; if(b.key==="consult" && M.audit.score!=null) parts.push(M.audit.score);
+    if(b.ptsLost!=null) parts.push(Math.max(0,100-b.ptsLost));
+    var resp=(b.frtSlaPct!=null&&b.resSlaPct!=null)?(b.frtSlaPct+b.resSlaPct)/2:(b.frtSlaPct!=null?b.frtSlaPct:b.resSlaPct); if(resp!=null) parts.push(resp);
+    return {b:b, resp:resp, score: parts.length?parts.reduce(function(a,x){return a+x;},0)/parts.length:null};
+  });
+}
+UI.page({
+  title: "Clinical Compliance · Business Lines",
+  subtitle: "Page 9 · Consult, Pharmacy and Diagnostics, each with its own score and owner",
+  intro: "One scorecard per business line so each head owns their number. Each score averages ticket quality (100 − ticket points per 1,000 orders) and responsiveness (tickets handled within deadline); Consult also includes the average audit score. The group score is the average of the three.",
+  render: function(c){
+    var S=buScores(c.M), PS=c.PM?buScores(c.PM):null, f1=UI.f1, fi=UI.fi, esc=UI.esc, O=APP.CFG.OWNERS;
+    var grp=S.filter(function(x){ return x.score!=null; }); grp=grp.length?grp.reduce(function(a,x){ return a+x.score; },0)/grp.length:null;
+    var pg=PS?PS.filter(function(x){ return x.score!=null; }):[]; pg=pg.length?pg.reduce(function(a,x){ return a+x.score; },0)/pg.length:null;
+    var r=APP.rag(grp), worst=S.slice().sort(function(a,b){ return a.score-b.score; })[0];
+    var h='<div class="banner '+r+'">'+UI.gauge(grp,r)+'<div class="headline"><div class="eyebrow">Group score · '+esc(c.p.label)+'</div><h2>Business lines average <span class="hl">'+f1(grp)+'</span></h2><div class="sub"><span class="rag big '+r+'">'+UI.ragLabel(r)+'</span>'+(pg!=null&&c.auditCmp?UI.delta(grp,pg,1,true)+' <span>vs '+esc(c.pv.label)+'</span>':'')+'<span>Lowest: <b style="color:var(--ink)">'+esc(worst.b.label)+' ('+f1(worst.score)+')</b></span></div></div></div>';
+    var wk=APP.weeks(APP.CFG.FIRST_MONTH+"-01", c.D.through), WM=wk.map(function(w){ return APP.metrics(c.D,w.start,w.end); });
+    h+='<div class="section-label"><span class="n">01</span>Scorecards</div><div class="bucards">';
+    S.forEach(function(x,i){ var b=x.b, p=PS?PS[i]:null, rr=APP.rag(x.score);
+      h+='<div class="bucard'+(worst===x?' worst':'')+'" style="border-top:5px solid var(--band-'+(rr==="none"?"amber":rr)+')"><div class="t"><b style="font-size:17px">'+esc(b.label)+'</b><span class="rag '+rr+'">'+UI.ragLabel(rr)+'</span></div>'+
+        '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px">Owner: '+esc(O[b.key])+'</div><div class="big tnum">'+f1(x.score)+'<small>/100</small></div><div style="font-size:11.5px">'+(p&&(b.key!=="consult"||c.auditCmp)?UI.delta(x.score,p.score,1,true)+' <span style="color:var(--ink-soft)">vs '+esc(c.pv.label)+'</span>':'')+'</div>'+
+        '<div style="margin:8px 0 2px;font-size:11px;color:var(--ink-soft)">Weekly ticket points lost</div>'+UI.spark(WM.map(function(m){ return m.tickets.lines[i].ptsLost; }),260,40,"var(--sev-high)")+
+        '<div class="rows" style="margin-top:8px"><span>Orders</span><b></b><b>'+fi(b.orders)+'</b><span>High tickets</span><b>'+fi(b.high)+'</b><b>'+f1(b.highPer1k,2)+' / 1k</b><span>Medium tickets</span><b>'+fi(b.medium)+'</b><b>'+f1(b.medPer1k,2)+' / 1k</b>'+
+        '<span>Answered in time</span><b></b><b>'+f1(b.frtSlaPct)+'%</b><span>Resolved in time</span><b></b><b>'+f1(b.resSlaPct)+'%</b><span>Pending · overdue</span><b>'+fi(b.pending)+'</b><b>'+fi(b.aged)+'</b>'+
+        (b.key==="consult"?'<span>Avg audit score</span><b></b><b>'+f1(c.M.audit.score)+'%</b>':'')+'</div>'+
+        '<div style="margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)">Top issues</div>'+
+        '<table style="margin-top:4px"><tbody>'+b.catList.slice().sort(function(a,z){ return z.n-a.n; }).slice(0,5).map(function(k){ return '<tr><td class="wrap" style="min-width:0;padding:5px 4px">'+esc(k.cat)+' <span class="sev '+k.sev+'">'+k.sev+'</span></td><td class="num" style="padding:5px 4px">'+fi(k.n)+'</td></tr>'; }).join("")+'</tbody></table></div>'; });
+    h+='</div>';
+    h+='<div class="section-label"><span class="n">02</span>Side by side</div><div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Measure</th>'+S.map(function(x){ return '<th class="num">'+esc(x.b.label)+'</th>'; }).join("")+'</tr></thead><tbody>'+
+      [["Score",function(x){ return f1(x.score); }],["Orders",function(x){ return fi(x.b.orders); }],["Tickets",function(x){ return fi(x.b.tickets); }],["High per 1,000 orders",function(x){ return f1(x.b.highPer1k,2); }],["Medium per 1,000 orders",function(x){ return f1(x.b.medPer1k,2); }],
+       ["Ticket points lost",function(x){ return f1(x.b.ptsLost); }],["Avg first response (hrs)",function(x){ return f1(x.b.frtAvg); }],["Avg resolution (hrs)",function(x){ return f1(x.b.resAvg); }],["Answered in time",function(x){ return f1(x.b.frtSlaPct)+'%'; }],["Resolved in time",function(x){ return f1(x.b.resSlaPct)+'%'; }],["Pending",function(x){ return fi(x.b.pending); }],["Overdue pending",function(x){ return fi(x.b.aged); }]]
+       .map(function(r){ return '<tr><td>'+r[0]+'</td>'+S.map(function(x){ return '<td class="num">'+r[1](x)+'</td>'; }).join("")+'</tr>'; }).join("")+'</tbody></table></div>'+
+      '<p class="cfg-note">Owners are placeholders. Send me each head\'s name and I will add it. Deadlines: High answered within '+APP.CFG.SLA.High.frt+' h / resolved within '+APP.CFG.SLA.High.res+' h; Medium '+APP.CFG.SLA.Medium.frt+' h / '+APP.CFG.SLA.Medium.res+' h.</p></div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Line score</h3><p>Average of ticket quality (100 minus 3 per High and 2 per Medium ticket per 1,000 orders) and responsiveness (share of tickets answered and resolved within deadline). Consult also includes the average audit score.</p><p class="why">Each head gets one number they can influence.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Card details</h3><p>Owner, score and change, a weekly line of ticket points lost, the key counts and the top five issues by volume.</p><p class="why">Everything a business-line review needs on one card.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Side-by-side table</h3><p>The same measures for all three lines, including average response and resolution hours and overdue pending tickets.</p><p class="why">Makes fair comparison easy, since every line is measured against its own orders.</p></div>'
+});
+
+</script>
+</body>
+</html>

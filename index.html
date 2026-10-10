@@ -1,7 +1,62 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clinical Compliance Scorecard has moved</title>
-<meta http-equiv="refresh" content="0; url=https://sanjeevyadav-blip.github.io/apollo-audit-dashboard/">
-<link rel="canonical" href="https://sanjeevyadav-blip.github.io/apollo-audit-dashboard/">
-<style>body{font-family:system-ui,sans-serif;background:#F6F4EE;color:#1B2430;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px}a{color:#0A4E43}@media(prefers-color-scheme:dark){body{background:#181A16;color:#EDE9DE}a{color:#8FDCC6}}</style>
-</head><body><p>The Clinical Compliance Scorecard is now Page 1 of the <a href="https://sanjeevyadav-blip.github.io/apollo-audit-dashboard/">Apollo audit website</a> .</p></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penalty Score · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+UI.page({
+  title: "Clinical Compliance · Penalty Score",
+  subtitle: "Page 1 · one score: start at 100, lose points for every problem found, heaviest first",
+  intro: "The headline board number. Every problem found in audits or patient tickets takes points away, and the more serious the problem, the more it costs. The red pieces show exactly where the points go.",
+  render: function(c){
+    var M=c.M, PM=c.PM, D=M.ded, PD=PM?PM.ded:null, T=M.tickets, A=M.audit, f1=UI.f1, fi=UI.fi, esc=UI.esc;
+    var rag=APP.rag(M.penalty), K=["critical","high","medium","others"];
+    var NM={critical:"Critical errors",high:"High-severity tickets",medium:"Medium-severity tickets",others:"Non-critical audit misses"};
+    var HOW={critical:"% of audits scoring zero",high:"High tickets per 1,000 orders",medium:"Medium tickets per 1,000 orders",others:"audit points missed on other parameters"};
+    var RANK={critical:"1 · HEAVIEST · ×4",high:"2 · ×3",medium:"3 · ×2",others:"4 · LIGHTEST · ×1"};
+    var cmp = c.auditCmp ? UI.delta(M.penalty,PM.penalty,1,true)+' <span>vs '+esc(c.pv.label)+'</span>' : (PM?'<span>no like-for-like comparison ('+esc(c.pv.label)+' audit data incomplete)</span>':'');
+    var h='<div class="banner '+rag+'">'+UI.gauge(M.penalty,rag)+'<div class="headline"><div class="eyebrow">Overall clinical compliance · '+esc(c.p.label)+'</div>'+
+      '<h2>Apollo 24|7 scores <span class="hl">'+f1(M.penalty)+'</span> out of 100</h2><div class="sub"><span class="rag big '+rag+'">'+UI.ragLabel(rag)+'</span>'+cmp+'</div><div class="wf">';
+    h+='<div class="wf-bar"><div class="seg keep" style="flex:0 0 calc('+(M.penalty||0).toFixed(2)+'% - 2px)">Score '+f1(M.penalty)+'</div>';
+    K.forEach(function(k){ var p=D[k].pts||0; if(p>0) h+='<div class="seg s-'+k+'" style="flex:0 0 calc('+p.toFixed(2)+'% - 2px)" title="'+NM[k]+': −'+f1(p)+'">'+(p>=3.5?'&minus;'+f1(p):'')+'</div>'; });
+    h+='</div><div class="wf-axis"><span>0</span><span>100 = no problems found</span></div>'+UI.legend([["Score kept","var(--accent)"],["Critical −"+f1(D.critical.pts),"var(--sev-critical)"],["High −"+f1(D.high.pts),"var(--sev-high)"],["Medium −"+f1(D.medium.pts),"var(--sev-medium)"],["Other misses −"+f1(D.others.pts),"var(--sev-others)"]])+'</div></div></div>';
+    var top=K.filter(function(k){ return D[k].pts!=null; }).sort(function(a,b){ return D[b].pts-D[a].pts; })[0];
+    h+='<div class="section-label"><span class="n">01</span>Where the '+f1(D.total)+' points are lost</div><div class="tiles4">';
+    K.forEach(function(k){ var x=D[k], px=PD?PD[k]:null, isA=(k==="critical"||k==="others");
+      var cm = px && (!isA||c.auditCmp) ? UI.delta(x.pts,px.pts,1,false,' pts')+' <span style="color:var(--ink-soft)">vs '+esc(c.pv.label)+'</span>' : '<span class="delta flat">no comparison</span>';
+      h+='<div class="dtile'+(k===top?' top':'')+'"><span class="sw" style="background:var(--sev-'+k+')"></span><div class="rank">'+RANK[k]+(k===top?' <span class="flag">Biggest gap</span>':'')+'</div><div class="nm">'+NM[k]+'</div>'+
+        '<div class="pts tnum">&minus;'+f1(x.pts)+'<small>points</small></div><div class="rate"><b>'+f1(x.rate,2)+'</b> '+HOW[k]+'</div><div class="chg">'+cm+'</div></div>'; });
+    h+='</div>';
+    var worst=T.lines.filter(function(b){ return b.ptsLost!=null; }).sort(function(a,b){ return b.ptsLost-a.ptsLost; })[0];
+    h+='<div class="section-label"><span class="n">02</span>Points lost to tickets, by business line</div><div class="bucards">';
+    T.lines.forEach(function(b,i){ var pb=PM?PM.tickets.lines[i]:null, hp=3*(b.highPer1k||0), mp=2*(b.medPer1k||0), tt=hp+mp||1;
+      h+='<div class="bucard'+(worst&&worst.key===b.key?' worst':'')+'"><div class="t"><b>'+esc(b.label)+'</b><span>'+fi(b.orders)+' orders</span></div><div class="big tnum">&minus;'+f1(b.ptsLost)+'<small>points</small></div>'+
+        '<div style="font-size:11.5px">'+(pb?UI.delta(b.ptsLost,pb.ptsLost,1,false,' pts')+' <span style="color:var(--ink-soft)">vs '+esc(c.pv.label)+'</span>':'')+'</div>'+
+        '<div class="mini"><i style="width:'+(hp/tt*100).toFixed(1)+'%;background:var(--sev-high)"></i><i style="width:'+(mp/tt*100).toFixed(1)+'%;background:var(--sev-medium)"></i></div>'+
+        '<div class="rows"><span>High tickets</span><b>'+fi(b.high)+'</b><b>'+f1(b.highPer1k,2)+' / 1k</b><span>Medium tickets</span><b>'+fi(b.medium)+'</b><b>'+f1(b.medPer1k,2)+' / 1k</b></div></div>'; });
+    h+='</div>';
+    var wk=APP.weeks(APP.CFG.FIRST_MONTH+"-01", c.D.through), pts=wk.map(function(w){ var m=APP.metrics(c.D,w.start,w.end); return {w:w,v:m.penalty,inc:m.audit.incomplete}; });
+    var G=APP.CFG.RAG;
+    h+='<div class="section-label"><span class="n">03</span>Weekly score</div><div class="panel">'+UI.lineChart("wk", pts.map(function(p){ return APP.util.shortDate(p.w.start); }), [{name:"Score", color:"var(--accent)", vals:pts.map(function(p){ return p.v; }), dashed:pts.map(function(p){ return p.inc; })}],
+      {w:1180,h:300,min:50,max:100,bands:[{from:G.green,to:100,color:"var(--band-green)"},{from:G.amber,to:G.green,color:"var(--band-amber)",op:.11},{from:50,to:G.amber,color:"var(--band-red)",op:.07}], extra:function(i){ return pts[i].inc?'<br><i>audit data incomplete</i>':''; }})+
+      UI.legend([["Weekly score","var(--accent)"],["Hollow = audit data incomplete","var(--surface)"]])+'</div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>The score</h3><p>Starts at <b>100</b> (no problems found) and loses points per problem: <b>4</b> per 1% of audits with a critical error, <b>3</b> per High ticket per 1,000 orders, <b>2</b> per Medium ticket per 1,000 orders, <b>1</b> per audit point missed on non-critical items.</p><p class="why">One number the board can follow month to month, with clear room to improve.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Bands</h3><div class="bands"><div><span class="rag green">&ge; 85</span><span>On track</span></div><div><span class="rag amber">75&ndash;85</span><span>Watch</span></div><div><span class="rag red">&lt; 75</span><span>Action needed</span></div></div><p class="why">Colour tells you at a glance whether action is needed.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Red pieces and tiles</h3><p>Each red piece of the bar, and each tile, is one problem type; the darker the red, the more serious. The tile marked <b>Biggest gap</b> is where most points are lost.</p><p class="why">Shows where to focus to raise the score fastest.</p></div>'
+});
+
+</script>
+</body>
+</html>

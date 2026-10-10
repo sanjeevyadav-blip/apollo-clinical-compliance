@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Five Pillars · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+function radar(vals, prev, labels){
+  var cx=200, cy=180, R=130, n=vals.length, s='<svg class="radar" viewBox="-70 0 540 360" role="img" aria-label="Five pillar radar">';
+  function pt(i,v){ var a=-Math.PI/2+i*2*Math.PI/n, r=R*Math.max(0,Math.min(100,v||0))/100; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+  [20,40,60,80,100].forEach(function(l){ var p=[]; for(var i=0;i<n;i++){ var q=pt(i,l); p.push(q[0].toFixed(1)+","+q[1].toFixed(1)); } s+='<polygon points="'+p.join(" ")+'" fill="none" stroke="var(--line)" stroke-width="1"/>'; });
+  for(var i=0;i<n;i++){ var q=pt(i,100); s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+q[0]+'" y2="'+q[1]+'" stroke="var(--line)"/>'; }
+  var g=[]; for(i=0;i<n;i++){ var q2=pt(i,APP.CFG.RAG.green); g.push(q2[0].toFixed(1)+","+q2[1].toFixed(1)); }
+  s+='<polygon points="'+g.join(" ")+'" fill="none" stroke="var(--band-green)" stroke-width="1.5" stroke-dasharray="4 4"/>';
+  if(prev){ var pp=[]; for(i=0;i<n;i++){ var q3=pt(i,prev[i]); pp.push(q3[0].toFixed(1)+","+q3[1].toFixed(1)); } s+='<polygon points="'+pp.join(" ")+'" fill="none" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="3 3"/>'; }
+  var vp=[]; for(i=0;i<n;i++){ var q4=pt(i,vals[i]); vp.push(q4[0].toFixed(1)+","+q4[1].toFixed(1)); }
+  s+='<polygon points="'+vp.join(" ")+'" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="2.5"/>';
+  for(i=0;i<n;i++){ var q5=pt(i,vals[i]); s+='<circle cx="'+q5[0]+'" cy="'+q5[1]+'" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
+    var a=-Math.PI/2+i*2*Math.PI/n, lx=cx+(R+30)*Math.cos(a), ly=cy+(R+22)*Math.sin(a), anc=Math.abs(Math.cos(a))<0.2?"middle":(Math.cos(a)>0?"start":"end");
+    s+='<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anc+'">'+labels[i]+'</text><text class="val" x="'+lx.toFixed(1)+'" y="'+(ly+15).toFixed(1)+'" text-anchor="'+anc+'">'+UI.f1(vals[i])+'</text>'; }
+  return s+'</svg>';
+}
+UI.page({
+  title: "Clinical Compliance · Five Pillars",
+  subtitle: "Page 2 · balanced scorecard: five areas scored 0–100, combined with weights",
+  intro: "Compliance seen as five pillars. Each pillar is scored 0–100 from the data that belongs to it, and the overall score is their weighted average. The radar shows at a glance which pillar is pulling the score down.",
+  render: function(c){
+    var P=c.M.pillars, PP=c.PM?c.PM.pillars:null, W=APP.CFG.PILLAR_WEIGHTS, f1=UI.f1, esc=UI.esc, M=c.M, A=M.audit, T=M.tickets, S=APP.CFG.SLA;
+    var defs=[
+      {k:"quality", n:"Clinical quality", how:"Average audit score of all scored audits", parts:"Avg audit score <b>"+f1(A.score)+"%</b> from "+UI.fi(A.scored)+" audits", audit:true},
+      {k:"safety", n:"Patient safety", how:"100 − 4 × critical-error % − 3 × High tickets per 1,000 orders", parts:"Critical <b>"+f1(A.criticalPct,2)+"%</b> · High <b>"+f1(T.highPer1k,2)+"</b> per 1k", audit:true},
+      {k:"experience", n:"Patient experience", how:"Average of: 100 − 2 × Medium tickets per 1,000 orders; consult fulfilment %; genuine-cancellation %", parts:"Medium <b>"+f1(T.medPer1k,2)+"</b>/1k · fulfilment <b>"+f1(M.fulfilPct)+"%</b> · not-genuine cancels <b>"+f1(M.notGenuinePct)+"%</b>"},
+      {k:"responsiveness", n:"Responsiveness", how:"Average of: % tickets answered within deadline and % resolved within deadline", parts:"Answered in time <b>"+f1(T.frtSlaPct)+"%</b> · resolved in time <b>"+f1(T.resSlaPct)+"%</b>"},
+      {k:"governance", n:"Governance", how:"Average of: audit coverage vs the "+APP.CFG.COVERAGE_TARGET+"% target (capped at 100) and % of audit leads completed", parts:"Coverage <b>"+f1(A.coverage,2)+"%</b> · leads completed <b>"+f1(A.leadDonePct)+"%</b>", audit:true}
+    ];
+    var rag=APP.rag(P.overall), cmpOk=c.auditCmp;
+    var h='<div class="banner '+rag+'">'+UI.gauge(P.overall,rag)+'<div class="headline"><div class="eyebrow">Five-pillar compliance · '+esc(c.p.label)+'</div><h2>Overall <span class="hl">'+f1(P.overall)+'</span> out of 100</h2>'+
+      '<div class="sub"><span class="rag big '+rag+'">'+UI.ragLabel(rag)+'</span>'+(cmpOk?UI.delta(P.overall,PP.overall,1,true)+' <span>vs '+esc(c.pv.label)+'</span>':'')+'</div>';
+    var weakest=defs.filter(function(d){ return P[d.k]!=null; }).sort(function(a,b){ return P[a.k]-P[b.k]; })[0];
+    h+='<p style="font-size:13px;color:var(--ink-soft);margin:12px 0 0">Weakest pillar: <b style="color:var(--ink)">'+(weakest?weakest.n+' ('+f1(P[weakest.k])+')':'—')+'</b>. Weights: '+defs.map(function(d){ return d.n+' '+W[d.k]+'%'; }).join(' · ')+'.</p></div></div>';
+    h+='<div class="grid2" style="margin-top:18px"><div class="panel"><h2>Pillar radar</h2><p class="desc">Green dashed ring = '+APP.CFG.RAG.green+' (on track). Grey dashed = '+(PP?esc(c.pv.label):'previous period')+'.</p>'+
+      radar(defs.map(function(d){ return P[d.k]; }), PP?defs.map(function(d){ return PP[d.k]; }):null, defs.map(function(d){ return d.n; }))+'</div>';
+    h+='<div class="panel"><h2>Score build-up</h2><p class="desc">Contribution = pillar score × weight.</p><div class="tbl-wrap"><table><thead><tr><th>Pillar</th><th class="num">Score</th><th class="num">Weight</th><th class="num">Contribution</th><th class="num">vs prev</th></tr></thead><tbody>';
+    defs.forEach(function(d){ var v=P[d.k]; h+='<tr><td><b>'+d.n+'</b></td><td class="num">'+UI.meter(v,1,v<APP.CFG.RAG.amber?'crit':(v<APP.CFG.RAG.green?'warn':''),100,'')+'</td><td class="num">'+W[d.k]+'%</td><td class="num">'+f1(v==null?null:v*W[d.k]/100,1)+'</td><td class="num">'+(PP&&(!d.audit||cmpOk)?UI.delta(v,PP[d.k],1,true):'—')+'</td></tr>'; });
+    h+='<tr class="total"><td>Overall</td><td class="num">'+f1(P.overall)+'</td><td class="num">100%</td><td class="num">'+f1(P.overall)+'</td><td class="num">'+(cmpOk?UI.delta(P.overall,PP.overall,1,true):'—')+'</td></tr></tbody></table></div></div></div>';
+    h+='<div class="section-label"><span class="n">01</span>What is inside each pillar</div><div class="kpi-grid" style="grid-template-columns:repeat(5,minmax(0,1fr))">';
+    defs.forEach(function(d){ var v=P[d.k], r=APP.rag(v); h+='<div class="stat '+r+'"><div class="l">'+d.n+'</div><div class="v">'+f1(v)+'<small>/100</small></div><div class="s">'+d.parts+'</div><div class="s" style="margin-top:6px;font-size:11px">'+d.how+'</div></div>'; });
+    h+='</div><p class="cfg-note">Settings: pillar weights '+Object.keys(W).map(function(k){ return k+' '+W[k]+'%'; }).join(', ')+'. Ticket deadlines: High answered within '+S.High.frt+' h and resolved within '+S.High.res+' h; Medium within '+S.Medium.frt+' h and '+S.Medium.res+' h. Tell me if you want different values.</p>';
+    return h.replace('repeat(5,minmax(0,1fr))','repeat(auto-fit,minmax(200px,1fr))');
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Five pillars</h3><p><b>Clinical quality</b> (how good consultations are), <b>Patient safety</b> (critical errors and High tickets), <b>Patient experience</b> (Medium tickets, completed consults, genuine cancellations), <b>Responsiveness</b> (tickets handled within deadline) and <b>Governance</b> (enough audits done, leads cleared).</p><p class="why">Covers every aspect of compliance, not only audit scores.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>The radar</h3><p>Each corner is a pillar; the further out, the better. The shaded shape is this period, the grey outline the previous one, and the green ring is the on-track level.</p><p class="why">A dent in the shape shows the pillar that needs work.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Weights</h3><p>Patient safety weighs most (30%), then clinical quality (25%), experience (20%), responsiveness (15%) and governance (10%). The overall score is the weighted average.</p><p class="why">Weights reflect what matters most to patients; they can be changed.</p></div>'
+});
+
+</script>
+</body>
+</html>

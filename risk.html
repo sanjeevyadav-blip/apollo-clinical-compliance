@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk Matrix · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+var LIK=[{n:"Rare",max:1},{n:"Unlikely",max:5},{n:"Possible",max:20},{n:"Likely",max:50},{n:"Frequent",max:Infinity}];
+var SEV={Critical:5, High:4, Medium:2};
+function likelihood(rate){ if(rate==null) return 0; for(var i=0;i<LIK.length;i++){ if(rate<LIK[i].max) return i+1; } return 5; }
+function zone(ix){ return ix>=15?"red":(ix>=8?"amber":"green"); }
+function items(M){
+  var out=[], A=M.audit;
+  if(A.scored) out.push({name:"Critical audit error (score 0)", bu:"Audits", sev:"Critical", n:A.zero, rate:A.zero/A.scored*10000, base:"per 10,000 audits"});
+  M.tickets.lines.forEach(function(b){ b.catList.forEach(function(cat){ out.push({name:cat.cat, bu:b.label, sev:cat.sev, n:cat.n, rate:b.orders?cat.n/b.orders*10000:null, base:"per 10,000 orders"}); }); });
+  out.forEach(function(x){ x.lik=likelihood(x.rate); x.ix=SEV[x.sev]*x.lik; x.zone=zone(x.ix); });
+  return out.sort(function(a,b){ return b.ix-a.ix || (b.rate||0)-(a.rate||0); });
+}
+UI.page({
+  title: "Clinical Compliance · Patient-Safety Risk Matrix",
+  subtitle: "Page 4 · every issue placed by severity × how often it happens",
+  intro: "The quality-committee view. Each issue type (critical audit errors and every ticket category) is placed on a grid by how serious it is and how often it happens. Top-right is where patient-safety risk is highest.",
+  render: function(c){
+    var M=c.M, list=items(M), prev=c.PM?items(c.PM):[], pm={}, f1=UI.f1, fi=UI.fi, esc=UI.esc;
+    prev.forEach(function(x){ pm[x.bu+"|"+x.name]=x; });
+    var red=list.filter(function(x){ return x.zone==="red"; }), amb=list.filter(function(x){ return x.zone==="amber"; });
+    var h='<div class="kpi-grid"><div class="stat red"><div class="l">Extreme risks (index &ge; 15)</div><div class="v">'+red.length+'</div><div class="s">'+(red.slice(0,2).map(function(x){ return esc(x.name); }).join(", ")||"none")+'</div></div>'+
+      '<div class="stat amber"><div class="l">High risks (index 8–14)</div><div class="v">'+amb.length+'</div><div class="s">'+(amb.slice(0,2).map(function(x){ return esc(x.name); }).join(", ")||"none")+'</div></div>'+
+      '<div class="stat green"><div class="l">Lower risks</div><div class="v">'+(list.length-red.length-amb.length)+'</div><div class="s">of '+list.length+' issue types seen</div></div>'+
+      '<div class="stat"><div class="l">Critical audit errors</div><div class="v">'+fi(M.audit.zero)+'</div><div class="s">'+f1(M.audit.criticalPct,2)+'% of '+fi(M.audit.scored)+' audits</div></div></div>';
+    /* grid */
+    var rows=["Critical","High","Medium"];
+    h+='<div class="section-label"><span class="n">01</span>Risk matrix</div><div class="panel"><div class="heat" style="grid-template-columns:110px repeat(5,minmax(0,1fr))">';
+    rows.forEach(function(sv){
+      h+='<div class="ax" style="justify-content:flex-end;font-weight:700;color:var(--ink)">'+sv+'</div>';
+      for(var l=1;l<=5;l++){ var ix=SEV[sv]*l, z=zone(ix), inCell=list.filter(function(x){ return x.sev===sv && x.lik===l; });
+        var bg = z==="red"?"var(--crit-soft)":(z==="amber"?"var(--warn-soft)":"var(--good-soft)");
+        h+='<div class="cell" style="background:'+bg+'" title="'+esc(inCell.map(function(x){ return x.bu+": "+x.name; }).join("\n"))+'"><span class="cnt">'+(inCell.length||"")+'</span><span style="color:var(--ink-soft)">index '+ix+'</span>'+
+          inCell.slice(0,2).map(function(x){ return '<span style="font-size:10.5px;line-height:1.25">'+esc(x.name.length>34?x.name.slice(0,32)+"…":x.name)+'</span>'; }).join("")+(inCell.length>2?'<span style="font-size:10.5px;color:var(--ink-soft)">+'+(inCell.length-2)+' more</span>':'')+'</div>'; }
+    });
+    h+='<div></div>'+LIK.map(function(L,i){ return '<div class="ax"><b>'+L.n+'</b><span>'+(i===0?'&lt; 1':(i===4?'&ge; 50':LIK[i-1].max+'–'+L.max))+' per 10k</span></div>'; }).join("")+'</div>'+
+      UI.legend([["Extreme (index ≥ 15)","var(--crit-soft)"],["High (8–14)","var(--warn-soft)"],["Lower (< 8)","var(--good-soft)"]])+'<p class="desc" style="margin:8px 0 0">Severity score: Critical 5, High 4, Medium 2. Likelihood 1–5 from the rate per 10,000. Risk index = severity × likelihood (max 25). Hover a cell to see every issue in it.</p></div>';
+    /* table */
+    h+='<div class="section-label"><span class="n">02</span>Top risks</div><div class="panel"><div class="tbl-wrap scroll-tbl"><table><thead><tr><th>#</th><th>Issue</th><th>Area</th><th>Severity</th><th class="num">Count</th><th class="num">Rate per 10k</th><th>Likelihood</th><th class="num">Risk index</th><th class="num">Rate vs prev</th></tr></thead><tbody>';
+    list.forEach(function(x,i){ var p=pm[x.bu+"|"+x.name];
+      h+='<tr><td class="num">'+(i+1)+'</td><td class="wrap"><b>'+esc(x.name)+'</b>'+'</td><td>'+esc(x.bu)+'</td><td><span class="sev '+(x.sev==="Critical"?"High":x.sev)+'">'+x.sev+'</span></td><td class="num">'+fi(x.n)+'</td><td class="num">'+f1(x.rate,2)+'</td><td>'+(LIK[x.lik-1]?LIK[x.lik-1].n:"—")+'</td>'+
+        '<td class="num"><span class="pill-st '+x.zone+'">'+x.ix+'</span></td><td class="num">'+(p&&(x.bu!=="Audits"||c.auditCmp)?UI.delta(x.rate,p.rate,2,false):'—')+'</td></tr>'; });
+    h+='</tbody></table></div></div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>The grid</h3><p>Rows = how serious (Critical, High, Medium). Columns = how often, per 10,000 orders (or audits). Each issue sits in one cell; red cells are the extreme risks.</p><p class="why">Standard way quality committees prioritise patient-safety work.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Risk index</h3><p>Severity score × likelihood level, from 1 to 25. 15 or more = extreme, 8–14 = high, below 8 = lower. The table ranks every issue by this index.</p><p class="why">Puts a frequent-but-mild issue and a rare-but-serious one on the same scale.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>What to do</h3><p>Red: root-cause review and an owner this month. Amber: monitor and set a reduction target. Green: keep watching. A risk moving right (more frequent) is an early warning.</p><p class="why">Turns data into a short, prioritised action list.</p></div>'
+});
+
+</script>
+</body>
+</html>

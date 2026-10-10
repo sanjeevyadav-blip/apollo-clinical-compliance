@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patient Journey · Clinical Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=1">
+</head>
+<body>
+<script src="assets/core.js?v=1"></script>
+<script src="assets/ui.js?v=1"></script>
+<script>
+function stages(M){
+  var T=M.tickets, L={}; T.lines.forEach(function(b){ L[b.key]=b; });
+  function st(bu, stage){ var b=L[bu]; if(!b||!b.orders) return null; var pts=b.stages[stage]||0; return Math.max(0, 100 - pts/b.orders*1000); }
+  function cats(bu, stage){ var b=L[bu]; return b ? b.catList.filter(function(c){ return c.stage===stage; }) : []; }
+  return [
+    {k:"consult", n:"Consultation", v:M.audit.score, d:"Average audit score · "+UI.fi(M.audit.zero)+" critical errors", how:"Average audit score", cats:[], audit:true},
+    {k:"prescription", n:"Prescription", v:st("consult","prescription"), d:"Prescription tickets per consult orders", how:"100 − (3 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","prescription")},
+    {k:"followup", n:"Doctor follow-up", v:st("consult","followup"), d:"Doctor reply, complaint & behaviour tickets", how:"100 − (3 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","followup")},
+    {k:"pharmacy", n:"Pharmacy delivery", v:st("pharma","pharmacy"), d:"Wrong, missing, expired or damaged items", how:"100 − (3 × High + 2 × Medium) per 1,000 pharmacy orders", cats:cats("pharma","pharmacy")},
+    {k:"diagnostics", n:"Diagnostics", v:st("diagnostics","diagnostics"), d:"Sampling and report issues", how:"100 − (3 × High + 2 × Medium) per 1,000 diagnostic orders", cats:cats("diagnostics","diagnostics")},
+    {k:"resolution", n:"Resolution", v:(T.frtSlaPct!=null&&T.resSlaPct!=null)?(T.frtSlaPct+T.resSlaPct)/2:null, d:"Answered in time "+UI.f1(T.frtSlaPct)+"% · resolved in time "+UI.f1(T.resSlaPct)+"%", how:"Average of % tickets answered and % resolved within deadline", cats:[]}
+  ];
+}
+UI.page({
+  title: "Clinical Compliance · Patient Journey",
+  subtitle: "Page 6 · compliance at every step a patient goes through",
+  intro: "Follows the patient from consultation to prescription, doctor follow-up, pharmacy, diagnostics and finally complaint resolution. Each step gets a 0–100 score; the weakest link is outlined in red.",
+  render: function(c){
+    var S=stages(c.M), PS=c.PM?stages(c.PM):null, f1=UI.f1, fi=UI.fi, esc=UI.esc;
+    var weak=S.filter(function(x){ return x.v!=null; }).sort(function(a,b){ return a.v-b.v; })[0];
+    var avg=S.filter(function(x){ return x.v!=null; }); avg=avg.length?avg.reduce(function(a,x){ return a+x.v; },0)/avg.length:null;
+    var h='<div class="banner '+APP.rag(avg)+'">'+UI.gauge(avg,APP.rag(avg))+'<div class="headline"><div class="eyebrow">Patient journey · '+esc(c.p.label)+'</div><h2>Journey average <span class="hl">'+f1(avg)+'</span> out of 100</h2>'+
+      '<div class="sub"><span class="rag big '+APP.rag(avg)+'">'+UI.ragLabel(APP.rag(avg))+'</span><span>Weakest link: <b style="color:var(--ink)">'+(weak?esc(weak.n)+' ('+f1(weak.v)+')':'—')+'</b></span></div></div></div>';
+    h+='<div class="section-label"><span class="n">01</span>Step by step</div><div class="journey">';
+    S.forEach(function(x,i){ var p=PS?PS[i]:null, r=APP.rag(x.v);
+      h+='<div class="jstep '+r+(weak&&weak.k===x.k?' weak':'')+'"><div class="no">STEP '+(i+1)+(i<S.length-1?' &rarr;':'')+'</div><h3>'+esc(x.n)+'</h3><div class="v">'+f1(x.v)+'</div>'+
+        '<div style="font-size:11.5px">'+(p&&(!x.audit||c.auditCmp)?UI.delta(x.v,p.v,1,true):'')+'</div><div class="d">'+x.d+'</div>'+(weak&&weak.k===x.k?'<div style="margin-top:6px"><span class="flag" style="background:var(--band-red);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px">WEAKEST LINK</span></div>':'')+'</div>'; });
+    h+='</div>';
+    h+='<div class="section-label"><span class="n">02</span>What happens at each step</div><div class="grid2">';
+    S.forEach(function(x){ if(!x.cats.length) return;
+      h+='<div class="panel"><h2>'+esc(x.n)+' <span style="font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);font-weight:500">· '+f1(x.v)+'</span></h2><p class="desc">'+x.how+'</p><div class="tbl-wrap"><table><thead><tr><th>Issue</th><th>Severity</th><th class="num">Tickets</th><th class="num">Per 1,000 orders</th><th class="num">Pending</th></tr></thead><tbody>'+
+        x.cats.map(function(k){ return '<tr><td class="wrap">'+esc(k.cat)+'</td><td><span class="sev '+k.sev+'">'+k.sev+'</span></td><td class="num">'+fi(k.n)+'</td><td class="num">'+f1(k.per1k,2)+'</td><td class="num">'+fi(k.pending)+'</td></tr>'; }).join("")+'</tbody></table></div></div>'; });
+    var A=c.M.audit, T=c.M.tickets;
+    h+='<div class="panel"><h2>Consultation &amp; resolution</h2><p class="desc">Steps measured from audits and ticket handling rather than ticket categories.</p><div class="tbl-wrap"><table><tbody>'+
+      '<tr><td>Average audit score</td><td class="num"><b>'+f1(A.score)+'%</b></td></tr><tr><td>Critical-error audits</td><td class="num">'+fi(A.zero)+' ('+f1(A.criticalPct,2)+'%)</td></tr><tr><td>Consults completed (fulfilment)</td><td class="num">'+f1(c.M.fulfilPct)+'%</td></tr>'+
+      '<tr><td>Tickets answered within deadline</td><td class="num">'+f1(T.frtSlaPct)+'%</td></tr><tr><td>Tickets resolved within deadline</td><td class="num">'+f1(T.resSlaPct)+'%</td></tr><tr><td>Tickets still pending</td><td class="num">'+fi(T.pending)+'</td></tr></tbody></table></div></div>';
+    h+='</div>';
+    return h;
+  },
+  guide:
+   '<div class="hcard"><h3><span class="no">A</span>Six steps</h3><p>Consultation (audit quality) &rarr; Prescription (prescription tickets) &rarr; Doctor follow-up (reply, complaint, behaviour tickets) &rarr; Pharmacy delivery &rarr; Diagnostics &rarr; Resolution (tickets handled within deadline).</p><p class="why">Shows compliance the way a patient experiences it.</p></div>'+
+   '<div class="hcard"><h3><span class="no">B</span>Step scores</h3><p>Ticket steps: 100 minus (3 per High + 2 per Medium ticket) per 1,000 orders of that business line. Consultation uses the average audit score; Resolution the share of tickets handled within deadline.</p><p class="why">Every step on the same 0–100 scale, so they can be compared.</p></div>'+
+   '<div class="hcard"><h3><span class="no">C</span>Weakest link</h3><p>The step with the lowest score is outlined in red. Improving it raises the journey average the most.</p><p class="why">A chain is only as strong as its weakest link.</p></div>'
+});
+
+</script>
+</body>
+</html>
