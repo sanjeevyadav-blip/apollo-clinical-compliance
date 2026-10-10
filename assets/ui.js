@@ -237,5 +237,5 @@
     });
   }
 
-  root.UI = { SRC:SRC, page:page, esc:esc, fi:fi, f1:f1, ragLabel:ragLabel, delta:delta, meter:meter, gauge:gauge, spark:spark, lineChart:lineChart, legend:legend, note:note, PAGES:PAGES };
+  root.UI = { SRC:SRC, wireCharts:wireCharts, explainHtml:explainHtml, page:page, esc:esc, fi:fi, f1:f1, ragLabel:ragLabel, delta:delta, meter:meter, gauge:gauge, spark:spark, lineChart:lineChart, legend:legend, note:note, PAGES:PAGES };
 })(window);
