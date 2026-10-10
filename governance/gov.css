@@ -1,0 +1,101 @@
+/* Clinical Governance & Compliance report — additions on top of ../assets/style.css */
+.gov .top h1{font-size:26px}
+.gbtns{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.muted{color:var(--ink-soft);opacity:.8}
+.periodbar .lbl{margin-left:4px}
+.periodbar .lbl:not(:first-child){margin-left:14px}
+.hero-note{font-size:12.5px;color:var(--ink-soft);margin:12px 0 0;line-height:1.5;max-width:720px}
+
+/* export blocks */
+.xp{position:relative}
+.xp-btn{position:absolute;top:8px;right:8px;z-index:3;font:600 10.5px/1 var(--font-mono,monospace);letter-spacing:.04em;padding:5px 8px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-soft);cursor:pointer;opacity:0;transition:opacity .15s}
+.xp:hover > .xp-btn,.xp-btn:focus{opacity:1}
+@media (hover:none){ .xp-btn{opacity:.85} }
+.xp-btn:hover{color:var(--accent-ink);border-color:var(--accent)}
+#gtoast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:all .2s;z-index:99;max-width:calc(100vw - 32px)}
+#gtoast.show{opacity:1;transform:translate(-50%,0)}
+
+/* key messages */
+.kmsg{background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:14px;padding:14px 18px 10px;margin:4px 0 18px;box-shadow:var(--shadow)}
+.kmsg .kh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;padding-right:64px}
+.kmsg .kt{font-family:var(--font-mono,monospace);font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+.kmsg ul{margin:0;padding-left:20px}
+.kmsg li{font-size:14px;line-height:1.55;color:var(--ink);margin:0 0 5px}
+.kmsg li b{color:var(--accent-ink)}
+
+/* tiles */
+.g-tiles{margin-bottom:6px}
+.g-tiles .stat .s .delta{font-size:11px}
+
+/* domains */
+.domains{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+@media (max-width:1100px){ .domains{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:600px){ .domains{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.dom{background:var(--surface);border:1px solid var(--line);border-top:5px solid var(--line-strong);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.dom.green{border-top-color:var(--band-green)} .dom.amber{border-top-color:var(--band-amber)} .dom.red{border-top-color:var(--band-red)}
+.dom .dn{font-size:12px;font-weight:700;color:var(--ink);min-height:30px}
+.dom .dv{font-family:var(--font-mono,monospace);font-size:30px;font-weight:600;color:var(--ink);line-height:1.1;margin:4px 0 6px}
+.dom .dv small{font-size:13px;color:var(--ink-soft)}
+.dom .dc{font-size:11px;margin-top:6px;min-height:16px}
+.dom .dh{font-size:10.5px;color:var(--ink-soft);margin-top:6px;line-height:1.4}
+
+/* horizontal bars */
+.hbars{display:grid;gap:7px}
+.hb{display:grid;grid-template-columns:minmax(0,46%) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:12.3px}
+.hb .hl{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .ht{height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.hb .ht i{display:block;height:100%;border-radius:4px}
+.hb .hv{font-family:var(--font-mono,monospace);font-weight:600;color:var(--ink);text-align:right;white-space:nowrap}
+.hb .hv small{display:block;font-weight:400;font-size:10.5px;color:var(--ink-soft)}
+@media (max-width:600px){ .hb{grid-template-columns:minmax(0,1fr) 70px} .hb .ht{grid-column:1 / -1;order:3} }
+
+/* scorecard */
+table.scard td{vertical-align:middle}
+table.scard tr.grp td{background:var(--surface-2);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);padding-top:10px}
+table.scard td.ind{min-width:250px;max-width:340px}
+table.scard .idef{font-size:11px;color:var(--ink-soft);font-weight:400;margin-top:2px;line-height:1.35}
+table.scard td.qcol{background:var(--surface-2);font-weight:600}
+.dot-st{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:var(--line-strong)}
+.dot-st.green{background:var(--band-green)} .dot-st.amber{background:var(--band-amber)} .dot-st.red{background:var(--band-red)}
+.pill-st.none{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line)}
+
+/* heat table */
+table.heatt td.hc{font-weight:600}
+table.heatt td.hc.green{background:var(--good-soft)} table.heatt td.hc.amber{background:var(--warn-soft)} table.heatt td.hc.red{background:var(--crit-soft)}
+
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:18px}
+@media (max-width:1000px){ .grid3{grid-template-columns:1fr} }
+.grid2 > .panel, .grid3 > .panel{margin-top:0}
+
+/* data-needed */
+.panel.need{border-style:dashed;background:var(--surface-2)}
+.panel.need h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.need-cols{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.need-cols span{font-family:var(--font-mono,monospace);font-size:11px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px 7px;color:var(--ink)}
+
+.srcl{margin:0;padding-left:18px;font-size:13px;line-height:1.7;color:var(--ink-soft)}
+.srcl a{color:var(--accent-ink)}
+.mini-h{margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+
+/* board pack */
+.packsec{margin-top:26px}
+.pack-h{font-family:var(--font-serif,Georgia),serif;font-size:22px;color:var(--ink);border-bottom:2px solid var(--accent);padding-bottom:8px;margin:0 0 14px;display:flex;align-items:center;gap:10px}
+.pack-h span{font-family:var(--font-mono,monospace);font-size:13px;background:var(--accent);color:#fff;border-radius:7px;padding:3px 9px}
+
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  .noprint,.xp-btn,.nav10-wrap,.periodbar .chips,#gtoast{display:none !important}
+  .periodbar{border:none;padding:0;margin:0 0 6px}
+  .gov .page-intro{display:none}
+  .packsec{break-before:page;margin-top:0}
+  .packsec:first-child{break-before:auto}
+  .panel,.kmsg,.banner,.dom,.bucard,.stat{break-inside:avoid;box-shadow:none}
+  .scroll-tbl{max-height:none !important;overflow:visible !important}
+  body{background:#fff}
+}
+.gov .grid2,.gov .grid3{margin-top:18px}
+.gov .domains + .grid2{margin-top:18px}
+@media print{ .section-label{break-after:avoid} .packsec .kmsg{break-after:avoid} }
