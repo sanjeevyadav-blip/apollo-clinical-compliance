@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=3"></script>
-<script src="assets/ui.js?v=3"></script>
+<script src="assets/core.js?v=4"></script>
+<script src="assets/ui.js?v=5"></script>
 <script>
 UI.page({
   title: "Clinical Compliance · Action Tracker",
@@ -23,7 +23,7 @@ UI.page({
     var pend=D.tickets.filter(function(t){ return /pending|open/i.test(t.status) && t.date>=APP.CFG.FIRST_MONTH+"-01"; }).map(function(t){ var age=U.daysBetween(t.date,now); return {t:t, age:age, over: age*24>SLA[t.sev].res}; });
     var over=pend.filter(function(x){ return x.over; }).sort(function(a,b){ return (a.t.sev===b.t.sev?0:(a.t.sev==="High"?-1:1)) || b.age-a.age; });
     var crit=D.audits.filter(function(a){ return a.a && a.a>=c.s && a.a<=c.e && a.s===0; }).sort(function(a,b){ return a.a<b.a?1:-1; });
-    var lim=U.addDaysIso(now,-30), backlog=D.audits.filter(function(a){ return !a.a && a.p && a.p>=lim && a.p<=now; }).map(function(a){ return {a:a, age:U.daysBetween(a.p,now)}; });
+    var lim=U.addDaysIso(now,-30), backlog=D.audits.filter(function(a){ return !a.arc && !a.a && a.p && a.p>=lim && a.p<=now; }).map(function(a){ return {a:a, age:U.daysBetween(a.p,now)}; });
     var docs=APP.doctors(D,c.s,c.e).filter(function(d){ return d.status==="review" || (d.ranked && d.status==="watch"); }).sort(function(a,b){ return (a.status===b.status?0:(a.status==="review"?-1:1)) || (a.score||0)-(b.score||0); });
     var bl3=backlog.filter(function(x){ return x.age>3; }).length;
     var total=crit.length+over.length+bl3+docs.filter(function(d){ return d.status==="review"; }).length;
