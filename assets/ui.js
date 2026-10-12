@@ -129,7 +129,7 @@
       ["First response time / resolution time","Hours from the moment the ticket was raised until support first replied / until the ticket was closed.", SRC.tickets],
       ["Pending · overdue","<b>Pending</b> = the ticket is still open. <b>Overdue</b> = it has been open longer than its resolution deadline, counted up to the latest data day.", SRC.tickets],
       ["Period, MTD and comparison","Pick a month with the chips or type your own dates. <b>MTD</b> (month to date) = from the 1st to the latest data day. The comparison is the previous month; for MTD it uses the <b>same days</b> of the previous month, so both sides are the same length.", ""],
-      ["Audit data incomplete ( * )","The audit sheets currently keep audits only from 21 Sep 2026. For earlier periods the audit-based numbers are partial, so those months carry a * and comparisons with them are hidden.", SRC.audit],
+      ["Audit data incomplete ( * )","Audits come from the live audit sheets plus the past-data sheets (PDS and Non Pharma from 25 Jun 2026, PDS-Mounjaro from 1 Jun 2026, WLP from 11 Feb 2026). A period that starts before an audit type&rsquo;s first audit is partial, carries a * and its comparisons with them are hidden.", SRC.audit],
       ["Consult date rule (D-1)","Audits done on a day review the consults of the <b>day before</b>. So when consults or audit leads are counted for a period, they are taken one day earlier.", SRC.consult],
       ["Colours","Scores: <span class=\"rag green\">&ge; "+G.green+" On track</span> <span class=\"rag amber\">"+G.amber+"&ndash;"+G.green+" Watch</span> <span class=\"rag red\">&lt; "+G.amber+" Action needed</span>. KPIs: green = target met, amber = within 10% of target, red = missed.", ""],
       ["Arrows &#9650; &#9660;","The change compared with the comparison period. <b>Green = better, red = worse</b>, whichever direction that is (for tickets, going down is green).", ""],
@@ -172,7 +172,7 @@
       (opts.guide?'<div class="section-label"><span class="n">?</span>How to read this page &middot; in short</div><div class="howto">'+opts.guide+'</div>':'')+
       '<div id="explain"></div>'+
       '<footer><b style="color:var(--ink)">Page '+(idx+1)+' of 10.</b> All numbers are read live from the Google Sheets each time the page opens (a saved copy is shown instantly while the live read finishes). Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
-      'Ticket data starts August 2026; the PDS and Non Pharma audit sheets currently keep audits from 21 Sep 2026 onwards, so earlier audit numbers are partial.</footer>';
+      'Ticket data starts August 2026. Audits include the past-data sheets, so audit history is complete from August 2026 onwards.</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap"; wrap.innerHTML=shell; document.body.appendChild(wrap);
 
     var D=null, PER=[], RANGE=null, wired=false, shownPrint="";

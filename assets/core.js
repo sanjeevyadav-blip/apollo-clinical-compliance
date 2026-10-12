@@ -64,6 +64,48 @@
     {type:"WLP - Non Pharma", file:CFG.FILE_WLP, sheet:"BS WLP Audits", headers:0}
   ];
 
+  /* Past data (archive sheets listed in the "past data" index sheet 1ZCXND9OMYLO…). Same layout as the live tabs.
+     Archive rows are used only for dates the live tab no longer holds (see cutArchive). */
+  var ARCHIVE_SOURCES = [
+    {type:"PDS", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"PDS Audit Sheet", headers:3},
+    {type:"PDS", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"PDS Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1oAGOQkq4Oi67JhhlS1f8mzdlclgIkScaNZ7e5dcLtw8", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1XCoF7l4JQErbJZ5YjOgFZrxFQG4yj0zTLkj5JaNHApQ", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"Non Pharma", file:"1DXn_iATm0mbtv2Q1vUWibIsIVA-OPBGz-SArLqO1tQY", sheet:"Non Pharma Audit Sheet", headers:3},
+    {type:"PDS- Mounjaro", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"PDS Mounjaro Audits from Jun 26", headers:0, hdrFix:{at:15, label:"Patient identification - -Age, Weight, Height, Marital Status, LMP (female patients)"}},
+    {type:"WLP - Non Pharma", file:"1PL-yTfCm6ZJa2gOtcXV_C1clCK0DSMY844FxtnDhckw", sheet:"BS WLP from Feb 2026", headers:0}
+  ];
+  var ARCHIVE_CANCEL = {file:"13GgExKCC_7Gstbwl-TOSSSvNzuQ7YNDFvs5KvR903fc", sheet:"PDS Cancellation Sheet"};
+  /* keep an archive row only where the live tab has nothing: audited rows dated before the live tab's first audit,
+     unaudited rows with an appointment before the live tab's first appointment. No live rows = keep everything. */
+  /* the archived Mounjaro tab's header row is missing the "Patient identification" label, so every label from
+     column P onward sits one column to the left of its data; hdrFix puts the missing label back */
+  function fixHdr(hdr, src){ if(!src||!src.hdrFix) return hdr; var h=hdr.slice(); h.splice(src.hdrFix.at, 0, src.hdrFix.label); return h; }
+  function cutArchive(live, arc){
+    var minA=null, minP=null; live.forEach(function(r){ if(r.a && (!minA||r.a<minA)) minA=r.a; if(r.p && (!minP||r.p<minP)) minP=r.p; });
+    if(!minA && !minP) return arc;
+    return arc.filter(function(r){ return r.a ? (!minA || r.a<minA) : (r.p && (!minP || r.p<minP)); });
+  }
+  /* archived sheets don't change: cache what was read for 24 h in this browser and read them one at a time (less load on Google) */
+  function arcIdb(){ return new Promise(function(res,rej){ if(!root.indexedDB) return rej(new Error("no idb")); var q; try{ q=root.indexedDB.open("apollo_archive",1); }catch(e){ return rej(e); } q.onupgradeneeded=function(){ q.result.createObjectStore("kv"); }; q.onsuccess=function(){ res(q.result); }; q.onerror=function(){ rej(q.error); }; }); }
+  function arcCacheGet(key){ return arcIdb().then(function(db){ return new Promise(function(res){ try{ var q=db.transaction("kv").objectStore("kv").get(key); q.onsuccess=function(){ var v=q.result; res(v && (Date.now()-v.t)<86400000 ? v.d : null); }; q.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }).catch(function(){ return null; }); }
+  function arcCachePut(key, d){ return arcIdb().then(function(db){ try{ db.transaction("kv","readwrite").objectStore("kv").put({t:Date.now(), d:d}, key); }catch(e){} }).catch(function(){}); }
+  function arcSeq(list, fn){ var out=[], p=Promise.resolve(); list.forEach(function(x,i){ p=p.then(function(){ return fn(x,i); }).then(function(v){ out[i]=v; }); }); return p.then(function(){ return out; }); }
+  function loadArchivesAll(){
+    return arcCacheGet("core_v2").then(function(hit){ if(hit) return hit;
+      return arcSeq(ARCHIVE_SOURCES, function(s){ return loadChecklist(s).catch(function(){ return null; }); }).then(function(list){
+        if(list.every(function(x){ return x; })) arcCachePut("core_v2", list); return list; }); });
+  }
+  function normParam(n){ return String(n||"").toLowerCase().replace(/\(\s*\d+\s*points?\s*\)/g," ").replace(/[^a-z]+/g," ").replace(/\s+/g," ").trim(); }
+  /* re-order an archive row's parameter scores to the live checklist (matched by name) */
+  function alignPv(liveDefs, arcDefs, pv){
+    if(!pv) return null; var A=arcDefs.map(function(d){ return normParam(d.name); });
+    return liveDefs.map(function(d){ var n=normParam(d.name), j=A.indexOf(n);
+      if(j<0) for(var k=0;k<A.length;k++){ if(A[k] && n && (A[k].indexOf(n)>=0 || n.indexOf(A[k])>=0)){ j=k; break; } }
+      return j>=0 ? pv[j] : null; });
+  }
+
   /* ---------- helpers ---------- */
   function pad2(n){ n=parseInt(n,10); return n<10?"0"+n:""+n; }
   var MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
@@ -108,7 +150,9 @@
     if(field.length||row.length){row.push(field);rows.push(row);}
     return rows;
   }
-  function fetchText(url){ return fetch(url+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); }); }
+  function fetchText(url, tries){ tries=tries==null?2:tries;
+    return fetch(url+"&_ts="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("http "+r.status); return r.text(); })
+      .catch(function(e){ if(tries<=0) throw e; return new Promise(function(res){ setTimeout(res, 1200*(3-tries)+Math.random()*800); }).then(function(){ return fetchText(url, tries-1); }); }); }
   function gvizCsv(file, base, tq, headers){
     return fetchText("https://docs.google.com/spreadsheets/d/"+file+"/gviz/tq?tqx=out:csv"+(headers?"&headers="+headers:"")+"&"+base+(tq?"&tq="+encodeURIComponent(tq):"")).then(parseCSV);
   }
@@ -158,7 +202,8 @@
   function loadChecklist(src){
     var base="sheet="+encodeURIComponent(src.sheet);
     var fixed=["appt","doc","dtype","spec","aud","auditor","st","en","att"];
-    function buildPlan(hdr){
+    function buildPlan(rawHdr){
+      var hdr=fixHdr(rawHdr, src);
       var ix={ appt:findIdx(hdr,/^date of appointment/i), doc:findIdx(hdr,/^doctor name$/i), dtype:findIdx(hdr,/^doctor type$/i), spec:findIdx(hdr,/^specialty$/i),
         aud:findIdx(hdr,/^date of audit$/i), auditor:findIdx(hdr,/^auditor name$/i), st:findIdx(hdr,/^audit start time$/i), en:findIdx(hdr,/^audit end time$/i),
         tot:findIdx(hdr,/^total score$/i), att:findIdx(hdr,/^attained %$/i) };
@@ -166,7 +211,7 @@
       var params=[]; if(ix.en>=0 && ix.tot>ix.en){ for(var p=ix.en+1;p<ix.tot;p++) params.push(p); }
       var sel=fixed.map(function(k){ return ix[k]; }).filter(function(i){ return i>=0; }).concat(params);
       var pos={}, k=0; fixed.forEach(function(f){ pos[f]= ix[f]>=0 ? k++ : -1; });
-      return { tq:"select "+sel.map(colLetter).join(","), labels:sel.map(function(i){ return hdr[i]; }),
+      return { tq:"select "+sel.map(colLetter).join(","), labels:sel.map(function(i){ return rawHdr[i]; }),
                ctx:{ pos:pos, pStart:k, paramLabels:params.map(function(p){ return hdr[p]; }) } };
     }
     return plannedCsv("chk_"+src.file.slice(0,8)+"_"+src.sheet, src.file, base, src.headers, buildPlan).then(function(res){
@@ -189,18 +234,18 @@
       return {rows:out, defs:defs};
     });
   }
-  function loadCancellationTab(base){
+  function loadCancellationTab(base, file){
     var keys=["appt","doc","dtype","aud","auditor","gen","reason","call","resp","why"];
     function buildPlan(hdr){
       function c(re){ return findIdx(hdr,re); }
       var ix={appt:c(/^date of appointment/i), doc:c(/^doctor name$/i), dtype:c(/^doctor type$/i), aud:c(/^date of audit$/i), auditor:c(/^auditor name$/i),
-        gen:c(/^genuine cancellation/i), reason:c(/^cancellation reason mentioned correctly/i), call:c(/^call initiated by doctor/i), resp:c(/^customer responded/i), why:c(/^reason for the cancellation/i)};
+        gen:c(/^genuine cancellation/i), reason:c(/^cancellation reason mentioned/i), call:c(/^call initiated by doctor/i), resp:c(/^customer responded/i), why:c(/^reason for the cancellation/i)};
       if(ix.aud<0) throw new Error("cancellation columns not found");
       var sel=keys.map(function(k){ return ix[k]; }).filter(function(i){ return i>=0; });
       var pos={}, k=0; keys.forEach(function(f){ pos[f]= ix[f]>=0 ? k++ : -1; });
       return { tq:"select "+sel.map(colLetter).join(","), labels:sel.map(function(i){ return hdr[i]; }), ctx:{pos:pos} };
     }
-    return plannedCsv("can_"+base, CFG.FILE_CANCEL, base, 0, buildPlan).then(function(res){
+    return plannedCsv("can_"+(file?file.slice(0,6):"")+base, file||CFG.FILE_CANCEL, base, 0, buildPlan).then(function(res){
       var rows=res.rows, pos=res.plan.ctx.pos, out=[];
       for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r||r.length<3) continue;
         var g=function(f){ return pos[f]>=0 ? (r[pos[f]]||"").trim() : ""; };
@@ -210,11 +255,13 @@
     });
   }
   function loadCancellation(){
-    return Promise.all([ loadCancellationTab("gid="+CFG.CANCEL_GID), loadCancellationTab("sheet="+encodeURIComponent(CFG.CANCEL_NEW_TAB)).catch(function(){ return []; }) ])
+    return Promise.all([ loadCancellationTab("gid="+CFG.CANCEL_GID), loadCancellationTab("sheet="+encodeURIComponent(CFG.CANCEL_NEW_TAB)).catch(function(){ return []; }),
+                         loadCancellationTab("sheet="+encodeURIComponent(ARCHIVE_CANCEL.sheet), ARCHIVE_CANCEL.file).catch(function(){ return []; }) ])
       .then(function(res){
         function basis(r){ return r.p || (r.a ? addDaysIso(r.a,-1) : null); }
-        return res[0].filter(function(r){ var b=basis(r); return !b || b < CFG.CANCEL_SWITCH_DATE; })
+        var live=res[0].filter(function(r){ var b=basis(r); return !b || b < CFG.CANCEL_SWITCH_DATE; })
           .concat(res[1].filter(function(r){ var b=basis(r); return b && b >= CFG.CANCEL_SWITCH_DATE; }));
+        return live.concat(cutArchive(live, res[2]).map(function(r){ r.arc=1; return r; }));
       });
   }
   var CONSULT_PLAN_KEY="cc10_plan_"+PLAN_VER+"_consults";
@@ -304,7 +351,7 @@
   }
 
   function load(){
-    var status={};
+    var status={}, arcPartial=false;
     function guard(name, p, fb){ return p.then(function(v){ status[name]="ok"; return v; }).catch(function(e){ status[name]="error: "+(e&&e.message||e); return fb; }); }
     return Promise.all([
       guard("Audit checklists", Promise.all(AUDIT_SOURCES.map(function(s){ return loadChecklist(s).catch(function(){ status["Audit checklists"]="partial"; return {rows:[],defs:[]}; }); })), []),
@@ -313,11 +360,20 @@
       guard("Consults by doctor", loadConsultsDoc(), []),
       guard("Consult & Diagnostics tickets", loadTicketsData(), []),
       guard("Medicine tickets", loadTicketsMedicine(), []),
-      guard("Orders", loadOrders(), [])
+      guard("Orders", loadOrders(), []),
+      guard("Past audit sheets", loadArchivesAll().then(function(list){ if(list.some(function(x){ return !x; })) arcPartial=true; return list.map(function(x){ return x||{rows:[],defs:[]}; }); }), [])
     ]).then(function(r){
       var defs={}, audits=[];
       (r[0]||[]).forEach(function(x,i){ defs[AUDIT_SOURCES[i].type]=x.defs||[]; audits=audits.concat(x.rows||[]); });
+      /* past data (last entry of r): per type, keep archive rows only where the live tab has nothing, then align parameter scores to the live checklist */
+      var arcRes=r[r.length-1]||[];
+      AUDIT_SOURCES.forEach(function(src){ var t=src.type, live=audits.filter(function(a){ return a.type===t; }), arc=[];
+        arcRes.forEach(function(x,i){ if(ARCHIVE_SOURCES[i].type!==t||!x.rows) return;
+          if(!defs[t]||!defs[t].length) defs[t]=x.defs||[];
+          x.rows.forEach(function(r0){ var row={}; for(var k in r0) row[k]=r0[k]; row.arc=1; row.pv=r0.pv?alignPv(defs[t], x.defs||[], r0.pv):null; arc.push(row); }); });
+        audits=audits.concat(cutArchive(live, arc)); });
       if(status["Audit checklists"]==="partial") status["Audit checklists"]="partial (one sheet failed)";
+      if(arcPartial) status["Past audit sheets"]="partial (a past sheet failed)";
       var D={audits:audits, defs:defs, cancels:r[1], consultsDay:r[2], consultsDoc:r[3], tickets:r[4].concat(r[5]), orders:r[6], status:status, fetchedAt:new Date()};
       var tMax=D.tickets.reduce(function(m,x){ return x.date>m?x.date:m; },""), oMax=D.orders.reduce(function(m,x){ return x.date>m?x.date:m; },"");
       D.through = (tMax&&oMax) ? (tMax<oMax?tMax:oMax) : (tMax||oMax||null);
