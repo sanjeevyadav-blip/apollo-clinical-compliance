@@ -56,12 +56,12 @@
       out.push({kind:"q", q:q, fy:fy, start:s, end:partialEnd?thr:r.end, fullStart:r.start, fullEnd:r.end, label:qLabel(q,fy)+(partialEnd?" (QTD)":""), short:qLabel(q,fy), partialStart:partialStart, partial:partialEnd});
       q++; if(q>4){ q=1; fy++; }
     }
-    APP.periods(D).forEach(function(p){ out.push({kind:"m", key:p.key, start:p.start, end:p.end, label:p.label, short:p.short, partial:p.partial}); });
+    APP.quickRanges(D).forEach(function(p){ var o={kind:"r"}; for(var k in p) o[k]=p[k]; if(!o.short) o.short=o.label; out.push(o); });
     return out;
   }
   function previous(p, PER){
     if(p.kind==="q"){ var i=PER.filter(function(x){ return x.kind==="q"; }), j=i.indexOf(p); return j>0 ? i[j-1] : null; }
-    if(p.kind==="m"){ var pv=APP.previousOf({key:p.key, start:p.start, end:p.end, partial:p.partial}); return pv.start>=APP.CFG.FIRST_MONTH+"-01" ? {kind:"m", start:pv.start, end:pv.end, label:pv.label} : null; }
+    if(p.kind==="m"||p.kind==="r"||p.kind==="c"){ var pv=APP.previousOf(p.key?{key:p.key, start:p.start, end:p.end, partial:p.partial}:{start:p.start, end:p.end}); return pv.start>=APP.CFG.FIRST_MONTH+"-01" ? {kind:"m", start:pv.start, end:pv.end, label:pv.label} : null; }
     return null;
   }
 
@@ -182,7 +182,7 @@
       docReview:docs.filter(function(d){ return d.status==="review"; }).length,
       resHrs:resN?resSum/resN:null, reg:regMetrics(R,s,e,D.through||todayIso())};
     B.domains=[
-      {k:"safety", n:"Patient safety", v:M.pillars.safety, how:"100 − 4 × critical-error % − 3 × High tickets per 1,000 orders"},
+      {k:"safety", n:"Patient safety", v:M.pillars.safety, how:"100 − 6 × critical-error % − 4 × High tickets per 1,000 orders"},
       {k:"quality", n:"Clinical effectiveness", v:M.pillars.quality, how:"Average audit score"},
       {k:"regulatory", n:"Regulatory (TPG)", v:B.tpg.index, how:"Average compliance of the 10 Telemedicine-guideline areas"},
       {k:"experience", n:"Patient experience", v:M.pillars.experience, how:"Medium tickets, fulfilment and genuine cancellations"},
@@ -332,7 +332,7 @@
       L.forEach(function(x){ var top=x.b.catList.slice().sort(function(a,z){ return z.n-a.n; })[0]; if(top) out.push(x.b.label+": top issue "+top.cat+" ("+fi(top.n)+" tickets)."); });
       return out; },
     actions:function(c){ var A=actions(c), h=A.filter(function(x){ return x.pr==="High"; }); return [A.length+" actions proposed, "+h.length+" high priority."].concat(h.slice(0,4).map(function(x){ return x.issue+" → "+x.act; })); },
-    method:function(){ return ["Headline score: 100 minus points lost (critical errors ×4, High tickets ×3, Medium tickets ×2, other audit misses ×1).","All numbers are read live from the Google Sheets; targets, deadlines and owners are editable settings."]; }
+    method:function(){ return ["Headline score: 100 minus points lost (critical errors ×6, High tickets ×4, Medium tickets ×2, other audit misses ×1).","All numbers are read live from the Google Sheets; targets, deadlines and owners are editable settings."]; }
   };
   function lineScores(M){ return M.tickets.lines.map(function(b){ var parts=[]; if(b.key==="consult"&&M.audit.score!=null) parts.push(M.audit.score); if(b.ptsLost!=null) parts.push(Math.max(0,100-b.ptsLost));
     var resp=(b.frtSlaPct!=null&&b.resSlaPct!=null)?(b.frtSlaPct+b.resSlaPct)/2:(b.frtSlaPct!=null?b.frtSlaPct:b.resSlaPct); if(resp!=null) parts.push(resp); return {b:b, resp:resp, score:avg(parts)}; }); }
@@ -364,7 +364,7 @@
     var over=0; c.D.tickets.forEach(function(t){ if(/pending|open/i.test(t.status) && t.date>=APP.CFG.FIRST_MONTH+"-01" && U.daysBetween(t.date,c.D.through)*24>APP.CFG.SLA[t.sev].res) over++; });
     h+='<div class="banner xp '+r+'" data-title="Clinical compliance score">'+UI.gauge(M.penalty,r)+'<div class="headline"><div class="eyebrow">Clinical compliance score &middot; '+esc(c.p.label)+'</div>'+
       '<h2>Apollo 24|7 scores <span class="hl">'+f1(M.penalty)+'</span> out of 100</h2><div class="sub"><span class="rag big '+r+'">'+UI.ragLabel(r)+'</span>'+bannerCmp(c,M.penalty,P?P.M.penalty:null,1)+'</div>'+
-      '<p class="hero-note">Starts at 100 and loses points for every problem found: critical audit errors (&times;4), High-severity tickets (&times;3), Medium tickets (&times;2) and other audit misses (&times;1). '+U.dateLabel(c.s)+' &ndash; '+U.dateLabel(c.e)+'.</p></div></div>';
+      '<p class="hero-note">Starts at 100 and loses points for every problem found: critical audit errors (&times;6), High-severity tickets (&times;4), Medium tickets (&times;2) and other audit misses (&times;1). '+U.dateLabel(c.s)+' &ndash; '+U.dateLabel(c.e)+'.</p></div></div>';
     h+=section("01","At a glance")+tiles([
       tile("Consults audited", fi(A.scored), f1(A.coverage,2)+"% of consults (target 2%)", APP.rag(Math.min(100,(A.coverage||0)/2*100))),
       tile("Average audit score", f1(A.score)+'<small>%</small>', f1(A.passPct,0)+"% of audits scored 90%+", rag(A.score)),
@@ -548,7 +548,7 @@
   PAGE.method = function(c){
     var h='', S=APP.CFG.SLA, LINKS=[["Audit sheets (PDS, Non Pharma)","https://docs.google.com/spreadsheets/d/1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA"],["WLP audit sheets (PDS-Mounjaro, BS WLP)","https://docs.google.com/spreadsheets/d/15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ"],
       ["PDS cancellation reviews","https://docs.google.com/spreadsheets/d/1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY"],["Total_Consults · Extract 1","https://docs.google.com/spreadsheets/d/10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg/edit#gid=1752463132"],["Ticket sheet (Data, Medicine, Orders)","https://docs.google.com/spreadsheets/d/1KlB3BOa5VRWux7_6ZTJyP13rA9SRtYoLrBjvtLUcaKU"],["Past data sheets (index of archived audit sheets)","https://docs.google.com/spreadsheets/d/1ZCXND9OMYLO268W3SuuX7M4BqZag4m3zYzc7PnjnHhI/edit#gid=0"]];
-    h+=section("01","How the headline score works")+card("Clinical compliance score","The same score as Page 1 of the compliance site.", '<div class="xexample"><div class="eq">Score = 100 &minus; 4 &times; critical-error % &minus; 3 &times; High tickets per 1,000 orders &minus; 2 &times; Medium tickets per 1,000 orders &minus; 1 &times; % points missed in other audits</div><p>Bands: <span class="rag green">&ge; 85 On track</span> <span class="rag amber">75&ndash;85 Watch</span> <span class="rag red">&lt; 75 Action needed</span>. Domain scores (0&ndash;100) are explained in the indicator dictionary below.</p></div>');
+    h+=section("01","How the headline score works")+card("Clinical compliance score","The same score as Page 1 of the compliance site.", '<div class="xexample"><div class="eq">Score = 100 &minus; 6 &times; critical-error % &minus; 4 &times; High tickets per 1,000 orders &minus; 2 &times; Medium tickets per 1,000 orders &minus; 1 &times; % points missed in other audits</div><p>Bands: <span class="rag green">&ge; 85 On track</span> <span class="rag amber">75&ndash;85 Watch</span> <span class="rag red">&lt; 75 Action needed</span>. Domain scores (0&ndash;100) are explained in the indicator dictionary below.</p></div>');
     h+=card("Periods","", '<p class="desc" style="margin:0">Quarters follow the Indian financial year: Q1 Apr&ndash;Jun, Q2 Jul&ndash;Sep, Q3 Oct&ndash;Dec, Q4 Jan&ndash;Mar. QTD / MTD = to the latest data day. Comparisons use the previous quarter (or month, same days for MTD). Audit-based comparisons are hidden when either period has incomplete audit data.</p>');
     h+=section("02","Indicator dictionary")+card("Every indicator on the scorecard","", table(["Domain","Indicator","Definition","Target","Source"], IND.map(function(I){ return '<tr>'+td(DOM[I.d])+td('<b>'+esc(I.l)+'</b>',0,' class="wrap"')+td(esc(I.def),0,' class="wrap"')+td(tgtTxt(I))+td(SRCN[I.src]||I.src)+'</tr>'; })));
     h+=card("Domain scores","Used on the Executive Summary.", table(["Domain","How it is worked out"], (c.B.domains).map(function(d){ return '<tr>'+td('<b>'+d.n+'</b>')+td(esc(d.how),0,' class="wrap"')+'</tr>'; })));
@@ -693,7 +693,7 @@
       '<div class="top-meta"><span class="status-chip off" id="status"><span class="dot"></span><span id="statusText">Loading live data…</span></span><span>Data through <b id="through">—</b></span>'+
       '<span class="noprint gbtns"><button class="btn primary" type="button" id="deckBtn">&#8681; Board deck (.pptx)</button><button class="btn" type="button" onclick="window.print()">Print / PDF</button>'+(isPack?'':'<a class="btn" href="'+packHref+'">Board pack</a>')+(opts.fullHref?'<a class="btn" href="'+opts.fullHref+'">Full governance report &#8599;</a>':'')+'<a class="ext" href="'+BASE+'" target="_blank" rel="noopener">Compliance site &#8599;</a></span></div></header>'+
       ((opts.intro||GUIDE[key])?'<p class="page-intro">'+(opts.intro||GUIDE[key])+'</p>':(isPack?'<p class="page-intro">Every board section on one page, laid out for printing. Use <b>Print / PDF</b> and choose &ldquo;Save as PDF&rdquo; (landscape) to create the board pack.</p>':''))+
-      '<div class="periodbar"><span class="lbl">Quarter</span><div class="chips" id="qChips"></div><span class="lbl">Month</span><div class="chips" id="mChips"></div><span class="range" id="rangeLabel"></span></div>'+
+      '<div class="periodbar"><span class="lbl">Quarter</span><div class="chips" id="qChips"></div><span class="lbl">Range</span><div class="chips" id="mChips"></div><div class="dates noprint"><input type="date" id="gFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="gTo" aria-label="To"></div><span class="range" id="rangeLabel"></span></div>'+
       '<div id="notes"></div><div id="kmsg"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
       '<footer>Apollo 24|7 Clinical Governance &amp; Compliance report. Numbers are read live from Google Sheets (a saved copy shows instantly while the live read finishes). Definitions, sources and data limits are on <a href="'+methodHref+'">Method &amp; Data</a>. Quarters follow the Indian financial year (April&ndash;March).</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap gov"+(isPack?" pack":""); wrap.innerHTML=shell; document.body.appendChild(wrap);
@@ -709,13 +709,16 @@
       else { chip.className="status-chip"+(bad.length?" warn":""); txt.textContent=bad.length?"Partially live":"Live from Google Sheets"; }
       chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n"); document.getElementById("through").textContent=U.dateLabel(D.through); }
     function chips(){
-      var qs=PER.filter(function(p){ return p.kind==="q"; }), ms=PER.filter(function(p){ return p.kind==="m"; });
-      function chip(p){ var inc=APP.metrics(D,p.start,p.end).audit.incomplete; return '<button class="chip'+(SEL&&SEL.start===p.start&&SEL.end===p.end?' on':'')+'" data-s="'+p.start+'" data-e="'+p.end+'"'+(inc?' title="Audit data incomplete for this period"':'')+'>'+esc(p.label)+(inc?' *':'')+'</button>'; }
+      var qs=PER.filter(function(p){ return p.kind==="q"; }), ms=PER.filter(function(p){ return p.kind==="r"; });
+      function chip(p){ var id=p.kind==="q"?"q"+p.q+"_"+p.fy:"r"+p.qk, txt=p.kind==="r"?p.chip:p.label;
+        if(p.off) return '<button class="chip" disabled style="opacity:.4;cursor:not-allowed" title="No ticket and order data yet for this range (data through '+U.dateLabel(D.through)+')">'+esc(txt)+'</button>';
+        var inc=APP.metrics(D,p.start,p.end).audit.incomplete; return '<button class="chip'+(SEL===p?' on':'')+'" data-id="'+id+'" data-s="'+p.start+'" data-e="'+p.end+'" title="'+U.dateLabel(p.start)+' – '+U.dateLabel(p.end)+(inc?' · audit data incomplete':'')+'">'+esc(txt)+(inc?' *':'')+'</button>'; }
       document.getElementById("qChips").innerHTML=qs.map(chip).join(""); document.getElementById("mChips").innerHTML=ms.map(chip).join("");
+      var gF=document.getElementById("gFrom"), gT=document.getElementById("gTo"); if(gF){ gF.min=gT.min=APP.CFG.FIRST_MONTH+"-01"; gF.max=gT.max=D.through; gF.value=SEL.start; gT.value=SEL.end; }
     }
     function pickDefault(){ var saved=null; try{ saved=JSON.parse(localStorage.getItem("gov_sel")||"null"); }catch(e){}
       var qs=PER.filter(function(p){ return p.kind==="q"; });
-      if(saved){ var m=PER.filter(function(p){ return p.kind===saved.kind && (p.kind==="q"?(p.q===saved.q&&p.fy===saved.fy):p.key===saved.key); })[0]; if(m) return m; }
+      if(saved){ var m=PER.filter(function(p){ return !p.off && p.kind===saved.kind && (p.kind==="q"?(p.q===saved.q&&p.fy===saved.fy):p.qk===saved.qk); })[0]; if(m) return m; }
       return qs[qs.length-1]||PER[0]; }
     function render(){
       var p=SEL, pvR=previous(p,PER), B=bundle(D,R,p.start,p.end), PB=pvR?bundle(D,R,pvR.start,pvR.end):null;
@@ -733,12 +736,19 @@
       UI.wireCharts(); addPngButtons(); if(y) root.scrollTo(0,y);
     }
     function show(d, mode){ D=d; MEMO={}; PER=periods(D); setStatus(mode); if(!PER.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
-      if(SEL){ var same=PER.filter(function(p){ return p.kind===SEL.kind && p.start===SEL.start; })[0]; SEL=same||pickDefault(); } else SEL=pickDefault();
+      if(SEL && SEL.kind==="c" && SEL.end<=D.through){ /* keep the typed dates */ }
+      else if(SEL){ var same=PER.filter(function(p){ return !p.off && p.kind===SEL.kind && (p.kind==="q"?p.start===SEL.start:p.qk===SEL.qk); })[0]; SEL=same||pickDefault(); } else SEL=pickDefault();
       chips(); render(); }
     document.querySelector(".periodbar").addEventListener("click", function(ev){ var t=ev.target.closest&&ev.target.closest(".chip"); if(!t) return;
-      SEL=PER.filter(function(p){ return p.start===t.dataset.s && p.end===t.dataset.e; })[0]; if(!SEL) return;
-      try{ localStorage.setItem("gov_sel", JSON.stringify({kind:SEL.kind, q:SEL.q, fy:SEL.fy, key:SEL.key})); }catch(e){}
+      var hit=PER.filter(function(p){ return !p.off && (p.kind==="q"?"q"+p.q+"_"+p.fy:"r"+p.qk)===t.dataset.id; })[0]; if(!hit) return; SEL=hit;
+      try{ localStorage.setItem("gov_sel", JSON.stringify({kind:SEL.kind, q:SEL.q, fy:SEL.fy, qk:SEL.qk})); }catch(e){}
       chips(); render(); });
+    (function(){ var gF=document.getElementById("gFrom"), gT=document.getElementById("gTo"); if(!gF) return;
+      var onD=function(){ if(!D||!gF.value||!gT.value||gF.value>gT.value) return;
+        var m=PER.filter(function(p){ return !p.off && p.start===gF.value && p.end===gT.value; })[0];
+        SEL=m||{kind:"c", start:gF.value, end:gT.value, label:U.dateLabel(gF.value)+" – "+U.dateLabel(gT.value), short:U.shortDate?U.shortDate(gF.value)+"–"+U.shortDate(gT.value):gF.value+"–"+gT.value};
+        chips(); render(); };
+      gF.addEventListener("change", onD); gT.addEventListener("change", onD); })();
     var keys=Object.keys(CFG.REGISTERS).filter(function(k){ return CFG.REGISTERS[k]; });
     var regP=Promise.all(keys.map(loadRegister)).then(function(res){ keys.forEach(function(k,i){ R[k]=res[i]; }); R._v=1; if(D){ MEMO={}; render(); } });
     var liveP=APP.load();
