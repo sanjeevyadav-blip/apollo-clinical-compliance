@@ -200,14 +200,14 @@
       try{ document.getElementById("explain").innerHTML = explainHtml(opts.explain ? opts.explain(ctx) : {}); }catch(err){ document.getElementById("explain").innerHTML=explainHtml({}); if(root.console) console.error(err); }
       if(y) root.scrollTo(0,y);
     }
-    function saveRange(){ try{ localStorage.setItem("cc10_range", JSON.stringify(RANGE)); }catch(e){} }
+    function saveRange(){ try{ localStorage.setItem("cc10_range2", JSON.stringify(RANGE)); }catch(e){} }
     function show(d, mode){
       D=d; PER=APP.periods(D); CH=APP.quickRanges(D); setStatus(mode);
       if(!PER.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
       var inc={}; CH.forEach(function(p){ if(!p.off) inc[p.start+p.end]=APP.metrics(D,p.start,p.end).audit.incomplete; });
       var mtd=CH.filter(function(p){ return p.qk==="mtd"&&!p.off; })[0], ok=PER.filter(function(p){ return !APP.metrics(D,p.start,p.end).audit.incomplete; });
       var def=mtd||(ok.length?ok[ok.length-1]:PER[PER.length-1]);
-      if(!RANGE){ var saved=null; try{ saved=JSON.parse(localStorage.getItem("cc10_range")||"null"); }catch(e){} RANGE=saved; }
+      if(!RANGE){ var saved=null; try{ saved=JSON.parse(localStorage.getItem("cc10_range2")||"null"); }catch(e){} RANGE=saved; }
       if(RANGE && RANGE.qk){ var q=CH.filter(function(x){ return x.qk===RANGE.qk&&!x.off; })[0]; RANGE = q ? {start:q.start,end:q.end,qk:q.qk} : null; }   /* a chip follows the calendar: MTD stays current */
       if(!(RANGE && RANGE.start>=APP.CFG.FIRST_MONTH+"-01" && RANGE.end<=D.through && RANGE.start<=RANGE.end)) RANGE={start:def.start, end:def.end, qk:def.qk};
       var dF=document.getElementById("dFrom"), dT=document.getElementById("dTo"); dF.min=dT.min=APP.CFG.FIRST_MONTH+"-01"; dF.max=dT.max=D.through;
