@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=4"></script>
-<script src="assets/ui.js?v=5"></script>
+<script src="assets/core.js?v=5"></script>
+<script src="assets/ui.js?v=6"></script>
 <script>
 function buScores(M){
   return M.tickets.lines.map(function(b){
@@ -66,7 +66,7 @@ UI.page({
       terms:[
         ["Line score","One compliance score per business line.","Average of: ticket quality (100 &minus; ticket points lost) and responsiveness; Consult also includes the average audit score.",S.calc],
         ["Group score","All three lines together.","Simple average of the three line scores.",S.calc],
-        ["Ticket points lost","How much the line&rsquo;s complaints cost.","3 &times; High per 1,000 orders + 2 &times; Medium per 1,000 orders.",S.tickets+"; "+S.orders],
+        ["Ticket points lost","How much the line&rsquo;s complaints cost.","4 &times; High per 1,000 orders + 2 &times; Medium per 1,000 orders.",S.tickets+"; "+S.orders],
         ["Responsiveness","How fast the line&rsquo;s complaints are handled.","Average of % answered within deadline and % resolved within deadline.",S.tickets],
         ["Avg first response (hrs)","Typical time to first reply.","Average first-response hours of the line&rsquo;s tickets.",S.tickets],
         ["Avg resolution (hrs)","Typical time to close a ticket.","Average resolution hours of closed tickets.",S.tickets],

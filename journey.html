@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=4"></script>
-<script src="assets/ui.js?v=5"></script>
+<script src="assets/core.js?v=5"></script>
+<script src="assets/ui.js?v=6"></script>
 <script>
 function stages(M){
   var T=M.tickets, L={}; T.lines.forEach(function(b){ L[b.key]=b; });
@@ -20,10 +20,10 @@ function stages(M){
   function cats(bu, stage){ var b=L[bu]; return b ? b.catList.filter(function(c){ return c.stage===stage; }) : []; }
   return [
     {k:"consult", n:"Consultation", v:M.audit.score, d:"Average audit score · "+UI.fi(M.audit.zero)+" critical errors", how:"Average audit score", cats:[], audit:true},
-    {k:"prescription", n:"Prescription", v:st("consult","prescription"), d:"Prescription tickets per consult orders", how:"100 − (3 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","prescription")},
-    {k:"followup", n:"Doctor follow-up", v:st("consult","followup"), d:"Doctor reply, complaint & behaviour tickets", how:"100 − (3 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","followup")},
-    {k:"pharmacy", n:"Pharmacy delivery", v:st("pharma","pharmacy"), d:"Wrong, missing, expired or damaged items", how:"100 − (3 × High + 2 × Medium) per 1,000 pharmacy orders", cats:cats("pharma","pharmacy")},
-    {k:"diagnostics", n:"Diagnostics", v:st("diagnostics","diagnostics"), d:"Sampling and report issues", how:"100 − (3 × High + 2 × Medium) per 1,000 diagnostic orders", cats:cats("diagnostics","diagnostics")},
+    {k:"prescription", n:"Prescription", v:st("consult","prescription"), d:"Prescription tickets per consult orders", how:"100 − (4 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","prescription")},
+    {k:"followup", n:"Doctor follow-up", v:st("consult","followup"), d:"Doctor reply, complaint & behaviour tickets", how:"100 − (4 × High + 2 × Medium) per 1,000 consult orders", cats:cats("consult","followup")},
+    {k:"pharmacy", n:"Pharmacy delivery", v:st("pharma","pharmacy"), d:"Wrong, missing, expired or damaged items", how:"100 − (4 × High + 2 × Medium) per 1,000 pharmacy orders", cats:cats("pharma","pharmacy")},
+    {k:"diagnostics", n:"Diagnostics", v:st("diagnostics","diagnostics"), d:"Sampling and report issues", how:"100 − (4 × High + 2 × Medium) per 1,000 diagnostic orders", cats:cats("diagnostics","diagnostics")},
     {k:"resolution", n:"Resolution", v:(T.frtSlaPct!=null&&T.resSlaPct!=null)?(T.frtSlaPct+T.resSlaPct)/2:null, d:"Answered in time "+UI.f1(T.frtSlaPct)+"% · resolved in time "+UI.f1(T.resSlaPct)+"%", how:"Average of % tickets answered and % resolved within deadline", cats:[]}
   ];
 }
@@ -64,10 +64,10 @@ UI.page({
         {t:"02 &middot; What happens at each step (tables)", see:"For each step, the ticket categories that belong to it with severity, number of tickets, rate per 1,000 orders and how many are still pending.", mean:"The exact complaints that pull each step down.", look:"High-severity rows and rows with many pending tickets."},
         {t:"Consultation &amp; resolution panel", see:"Audit score, critical errors, fulfilment, and ticket answer / resolve rates.", mean:"These two steps are measured from audits and ticket handling instead of ticket categories.", look:"A low &lsquo;resolved within deadline&rsquo;, which pulls down the Resolution step."}
       ],
-      example: (ph&&phv&&ph.orders) ? '<p>Example: <b>Pharmacy delivery</b> in '+esc(c.p.label)+'.</p><div class="eq">Ticket points = 3 &times; '+fi(ph.high)+' High + 2 &times; '+fi(ph.medium)+' Medium = '+fi(3*ph.high+2*ph.medium)+'</div><div class="eq">100 &minus; '+fi(3*ph.high+2*ph.medium)+' &divide; '+fi(ph.orders)+' orders &times; 1,000 = <b>'+f1(phv.v,1)+'</b></div><p>The journey average is the simple average of the six steps: <b>'+f1(avg,1)+'</b>.</p>' : '',
+      example: (ph&&phv&&ph.orders) ? '<p>Example: <b>Pharmacy delivery</b> in '+esc(c.p.label)+'.</p><div class="eq">Ticket points = 4 &times; '+fi(ph.high)+' High + 2 &times; '+fi(ph.medium)+' Medium = '+fi(APP.CFG.D_HIGH*ph.high+APP.CFG.D_MEDIUM*ph.medium)+'</div><div class="eq">100 &minus; '+fi(APP.CFG.D_HIGH*ph.high+APP.CFG.D_MEDIUM*ph.medium)+' &divide; '+fi(ph.orders)+' orders &times; 1,000 = <b>'+f1(phv.v,1)+'</b></div><p>The journey average is the simple average of the six steps: <b>'+f1(avg,1)+'</b>.</p>' : '',
       terms:[
         ["Consultation","Quality of the consultation itself.","Average audit score.",S.audit],
-        ["Prescription","Problems with prescriptions after a consult.","100 &minus; (3 &times; High + 2 &times; Medium prescription tickets) &divide; consult orders &times; 1,000. Consult categories that mention &lsquo;prescription&rsquo;.",S.tickets+"; "+S.orders],
+        ["Prescription","Problems with prescriptions after a consult.","100 &minus; (4 &times; High + 2 &times; Medium prescription tickets) &divide; consult orders &times; 1,000. Consult categories that mention &lsquo;prescription&rsquo;.",S.tickets+"; "+S.orders],
         ["Doctor follow-up","Other consult complaints: doctor replies, behaviour, charging.","Same formula with all other Consult ticket categories.",S.tickets+"; "+S.orders],
         ["Pharmacy delivery","Problems with medicine orders: wrong, missing, expired or damaged items.","Same formula with all Medicine tickets &divide; pharmacy orders.",S.tickets+"; "+S.orders],
         ["Diagnostics","Problems with lab tests: sampling and reports.","Same formula with all Diagnostics tickets &divide; diagnostic orders.",S.tickets+"; "+S.orders],

@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="assets/style.css?v=3">
 </head>
 <body>
-<script src="assets/core.js?v=4"></script>
-<script src="assets/ui.js?v=5"></script>
+<script src="assets/core.js?v=5"></script>
+<script src="assets/ui.js?v=6"></script>
 <script>
 function radar(vals, prev, labels){
   var cx=200, cy=180, R=130, n=vals.length, s='<svg class="radar" viewBox="-70 0 540 360" role="img" aria-label="Five pillar radar">';
@@ -37,7 +37,7 @@ UI.page({
     var P=c.M.pillars, PP=c.PM?c.PM.pillars:null, W=APP.CFG.PILLAR_WEIGHTS, f1=UI.f1, esc=UI.esc, M=c.M, A=M.audit, T=M.tickets, S=APP.CFG.SLA;
     var defs=[
       {k:"quality", n:"Clinical quality", how:"Average audit score of all scored audits", parts:"Avg audit score <b>"+f1(A.score)+"%</b> from "+UI.fi(A.scored)+" audits", audit:true},
-      {k:"safety", n:"Patient safety", how:"100 − 4 × critical-error % − 3 × High tickets per 1,000 orders", parts:"Critical <b>"+f1(A.criticalPct,2)+"%</b> · High <b>"+f1(T.highPer1k,2)+"</b> per 1k", audit:true},
+      {k:"safety", n:"Patient safety", how:"100 − 6 × critical-error % − 4 × High tickets per 1,000 orders", parts:"Critical <b>"+f1(A.criticalPct,2)+"%</b> · High <b>"+f1(T.highPer1k,2)+"</b> per 1k", audit:true},
       {k:"experience", n:"Patient experience", how:"Average of: 100 − 2 × Medium tickets per 1,000 orders; consult fulfilment %; genuine-cancellation %", parts:"Medium <b>"+f1(T.medPer1k,2)+"</b>/1k · fulfilment <b>"+f1(M.fulfilPct)+"%</b> · not-genuine cancels <b>"+f1(M.notGenuinePct)+"%</b>"},
       {k:"responsiveness", n:"Responsiveness", how:"Average of: % tickets answered within deadline and % resolved within deadline", parts:"Answered in time <b>"+f1(T.frtSlaPct)+"%</b> · resolved in time <b>"+f1(T.resSlaPct)+"%</b>"},
       {k:"governance", n:"Governance", how:"Average of: audit coverage vs the "+APP.CFG.COVERAGE_TARGET+"% target (capped at 100) and % of audit leads completed", parts:"Coverage <b>"+f1(A.coverage,2)+"%</b> · leads completed <b>"+f1(A.leadDonePct)+"%</b>", audit:true}
@@ -74,7 +74,7 @@ UI.page({
         '<p>Example inside a pillar: <b>Responsiveness</b> = (tickets answered in time '+f1(T.frtSlaPct,1)+'% + tickets resolved in time '+f1(T.resSlaPct,1)+'%) &divide; 2 = <b>'+f1(P.responsiveness,1)+'</b>.</p>',
       terms:[
         ["Clinical quality","How good the consultations are, judged by auditors.","Average audit score of all scored audits.",S.audit],
-        ["Patient safety","How often things happen that could harm a patient.","100 &minus; 4 &times; critical-error % &minus; 3 &times; High tickets per 1,000 orders.",S.audit+"; "+S.tickets],
+        ["Patient safety","How often things happen that could harm a patient.","100 &minus; 6 &times; critical-error % &minus; 4 &times; High tickets per 1,000 orders.",S.audit+"; "+S.tickets],
         ["Patient experience","How smooth the service felt to the patient.","Average of three parts: (100 &minus; 2 &times; Medium tickets per 1,000 orders), consult fulfilment %, and (100 &minus; not-genuine cancellation %).",S.tickets+"; "+S.consult+"; "+S.cancel],
         ["Responsiveness","How quickly complaints are handled.","Average of: % of tickets first answered within deadline and % of tickets resolved within deadline.",S.tickets],
         ["Governance","Whether the checking process itself is done properly.","Average of: audit coverage compared with the "+APP.CFG.COVERAGE_TARGET+"% target (capped at 100) and % of audit leads completed.",S.audit+"; "+S.consult],
