@@ -124,11 +124,11 @@
       ["Business line","<b>Consult</b> (doctor consultations), <b>Pharmacy</b> (medicine orders) and <b>Diagnostics</b> (lab tests).", SRC.orders],
       ["Orders","How many orders a business line handled on each day. Tickets are divided by orders so that a busy day and a quiet day can be compared fairly.", SRC.orders],
       ["Per 1,000 orders","Tickets &divide; orders &times; 1,000. Example: 30 High tickets on 20,000 orders = 1.5 per 1,000. The overall figure is the simple average of the three business lines, so each line counts equally.", SRC.calc],
-      ["Ticket points","A way to add up tickets by seriousness: each High ticket = <b>3</b> points, each Medium ticket = <b>2</b> points.", SRC.calc],
+      ["Ticket points","A way to add up tickets by seriousness: each High ticket = <b>4</b> points, each Medium ticket = <b>2</b> points.", SRC.calc],
       ["Deadlines (SLA)","<b>First response</b>: High tickets answered within "+S.High.frt+" h, Medium within "+S.Medium.frt+" h. <b>Resolution</b>: High tickets closed within "+S.High.res+" h, Medium within "+S.Medium.res+" h. These are starting values and can be changed.", SRC.calc],
       ["First response time / resolution time","Hours from the moment the ticket was raised until support first replied / until the ticket was closed.", SRC.tickets],
       ["Pending · overdue","<b>Pending</b> = the ticket is still open. <b>Overdue</b> = it has been open longer than its resolution deadline, counted up to the latest data day.", SRC.tickets],
-      ["Period, MTD and comparison","Pick a month with the chips or type your own dates. <b>MTD</b> (month to date) = from the 1st to the latest data day. The comparison is the previous month; for MTD it uses the <b>same days</b> of the previous month, so both sides are the same length.", ""],
+      ["Range chips, MTD and comparison","Pick <b>Today, Yesterday, Last 7 Days, MTD, last month, the month before, Last 30 Days or All Time</b>, or type your own dates. <b>Last 7 / 30 Days</b> = the last 7 / 30 days that have data. Ranges stop at the &ldquo;Data through&rdquo; day, because ticket and order sheets arrive a day or two late; a greyed chip has no data yet. <b>MTD</b> (month to date) = from the 1st to the latest data day and is compared with the <b>same days</b> of the previous month; a full month is compared with the month before; any other range is compared with the same number of days just before it.", ""],
       ["Audit data incomplete ( * )","Audits come from the live audit sheets plus the past-data sheets (PDS and Non Pharma from 25 Jun 2026, PDS-Mounjaro from 1 Jun 2026, WLP from 11 Feb 2026). A period that starts before an audit type&rsquo;s first audit is partial, carries a * and its comparisons with them are hidden.", SRC.audit],
       ["Consult date rule (D-1)","Audits done on a day review the consults of the <b>day before</b>. So when consults or audit leads are counted for a period, they are taken one day earlier.", SRC.consult],
       ["Colours","Scores: <span class=\"rag green\">&ge; "+G.green+" On track</span> <span class=\"rag amber\">"+G.amber+"&ndash;"+G.green+" Watch</span> <span class=\"rag red\">&lt; "+G.amber+" Action needed</span>. KPIs: green = target met, amber = within 10% of target, red = missed.", ""],
@@ -165,7 +165,7 @@
       '<div class="top-meta"><span class="status-chip off" id="status"><span class="dot"></span><span id="statusText">Loading live data…</span></span>'+
       '<span>Data through <b id="through">—</b></span><span class="noprint"><a class="ext" href="'+AUDIT_SITE+'" target="_blank" rel="noopener">Audit dashboard &#8599;</a> &middot; <button class="btn" onclick="window.print()">Print / PDF</button></span></div></header>'+
       (opts.intro?'<p class="page-intro">'+opts.intro+'</p>':'')+
-      '<div class="periodbar"><span class="lbl">Period</span><div class="chips" id="periodChips"></div>'+
+      '<div class="periodbar"><span class="lbl">Range</span><div class="chips" id="periodChips"></div>'+
       '<div class="dates"><input type="date" id="dFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="dTo" aria-label="To"></div>'+
       '<span class="range" id="rangeLabel"></span></div>'+
       '<div id="notes"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
@@ -175,7 +175,7 @@
       'Ticket data starts August 2026. Audits include the past-data sheets, so audit history is complete from August 2026 onwards.</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap"; wrap.innerHTML=shell; document.body.appendChild(wrap);
 
-    var D=null, PER=[], RANGE=null, wired=false, shownPrint="";
+    var D=null, PER=[], CH=[], RANGE=null, wired=false, shownPrint="";
     function timeLabel(t){ try{ var d=new Date(t); return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short"})+", "+d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } }
     function setStatus(mode){
       var st=D.status||{}, bad=Object.keys(st).filter(function(k){ return !/^ok/.test(st[k]); }), chip=document.getElementById("status"), txt=document.getElementById("statusText");
@@ -186,11 +186,11 @@
       document.getElementById("through").textContent=U.dateLabel(D.through);
     }
     function run(){
-      var s=RANGE.start, e=RANGE.end, p=PER.filter(function(x){ return x.start===s&&x.end===e; })[0]||{start:s,end:e,label:U.dateLabel(s)+" – "+U.dateLabel(e)};
+      var s=RANGE.start, e=RANGE.end, hit=function(x){ return !x.off&&x.start===s&&x.end===e; }, p=(RANGE.qk?CH.filter(function(x){ return hit(x)&&x.qk===RANGE.qk; })[0]:null)||CH.filter(hit)[0]||PER.filter(hit)[0]||{start:s,end:e,label:U.dateLabel(s)+" – "+U.dateLabel(e)};
       var pv=APP.previousOf(p), M=APP.metrics(D,s,e), PM=(pv.start>=APP.CFG.FIRST_MONTH+"-01")?APP.metrics(D,pv.start,pv.end):null;
       document.getElementById("dFrom").value=s; document.getElementById("dTo").value=e;
       document.getElementById("rangeLabel").innerHTML=U.dateLabel(s)+" &ndash; "+U.dateLabel(e)+(PM?' &middot; compared with <b>'+esc(pv.label)+'</b>':'');
-      Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.s===s&&c.dataset.e===e); });
+      Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.q===(p.qk||"")); });
       var notes=[]; if(M.audit.incomplete && opts.usesAudits!==false) notes.push("<b>Audit data is incomplete for this period.</b> "+M.audit.missing.map(function(m){ return esc(m.type)+" audits are held only from "+(m.from?U.dateLabel(m.from):"(none)"); }).join("; ")+". Audit-based numbers cover what the live sheets still hold.");
       document.getElementById("notes").innerHTML=notes.map(note).join("");
       var ctx={D:D, M:M, PM:PM, p:p, pv:pv, s:s, e:e, periods:PER, auditCmp:!!(PM&&!PM.audit.incomplete&&!M.audit.incomplete)};
@@ -202,19 +202,20 @@
     }
     function saveRange(){ try{ localStorage.setItem("cc10_range", JSON.stringify(RANGE)); }catch(e){} }
     function show(d, mode){
-      D=d; PER=APP.periods(D); setStatus(mode);
+      D=d; PER=APP.periods(D); CH=APP.quickRanges(D); setStatus(mode);
       if(!PER.length){ document.getElementById("content").innerHTML='<div class="panel empty">No data could be read from the sheets.</div>'; return; }
-      var inc={}; PER.forEach(function(p){ inc[p.start+p.end]=APP.metrics(D,p.start,p.end).audit.incomplete; });
-      var ok=PER.filter(function(p){ return !inc[p.start+p.end]; });
-      var def=ok.length?ok[ok.length-1]:PER[PER.length-1];
+      var inc={}; CH.forEach(function(p){ if(!p.off) inc[p.start+p.end]=APP.metrics(D,p.start,p.end).audit.incomplete; });
+      var mtd=CH.filter(function(p){ return p.qk==="mtd"&&!p.off; })[0], ok=PER.filter(function(p){ return !APP.metrics(D,p.start,p.end).audit.incomplete; });
+      var def=mtd||(ok.length?ok[ok.length-1]:PER[PER.length-1]);
       if(!RANGE){ var saved=null; try{ saved=JSON.parse(localStorage.getItem("cc10_range")||"null"); }catch(e){} RANGE=saved; }
-      if(!(RANGE && RANGE.start>=APP.CFG.FIRST_MONTH+"-01" && RANGE.end<=D.through && RANGE.start<=RANGE.end)) RANGE={start:def.start, end:def.end};
-      PER.forEach(function(p){ if(p.key && RANGE.start===p.start && p.partial && RANGE.end!==p.end) RANGE.end=p.end; });   /* keep MTD current */
+      if(RANGE && RANGE.qk){ var q=CH.filter(function(x){ return x.qk===RANGE.qk&&!x.off; })[0]; RANGE = q ? {start:q.start,end:q.end,qk:q.qk} : null; }   /* a chip follows the calendar: MTD stays current */
+      if(!(RANGE && RANGE.start>=APP.CFG.FIRST_MONTH+"-01" && RANGE.end<=D.through && RANGE.start<=RANGE.end)) RANGE={start:def.start, end:def.end, qk:def.qk};
       var dF=document.getElementById("dFrom"), dT=document.getElementById("dTo"); dF.min=dT.min=APP.CFG.FIRST_MONTH+"-01"; dF.max=dT.max=D.through;
-      document.getElementById("periodChips").innerHTML=PER.map(function(p){ var i=inc[p.start+p.end];
-        return '<button class="chip" data-s="'+p.start+'" data-e="'+p.end+'"'+(i?' title="Audit data incomplete for this month"':'')+'>'+esc(p.label)+(i?' *':'')+'</button>'; }).join("");
+      document.getElementById("periodChips").innerHTML=CH.map(function(p){ var i=inc[p.start+p.end];
+        if(p.off) return '<button class="chip" disabled style="opacity:.4;cursor:not-allowed" title="No ticket and order data yet for this range (data through '+U.dateLabel(D.through)+')">'+esc(p.chip)+'</button>';
+        return '<button class="chip" data-q="'+p.qk+'" data-s="'+p.start+'" data-e="'+p.end+'" title="'+U.dateLabel(p.start)+' – '+U.dateLabel(p.end)+(i?' · audit data incomplete':'')+'">'+esc(p.chip)+(i?' *':'')+'</button>'; }).join("");
       if(!wired){ wired=true;
-        document.getElementById("periodChips").addEventListener("click", function(ev){ var t=ev.target.closest?ev.target.closest(".chip"):ev.target; if(!t||!t.dataset||!t.dataset.s) return; RANGE={start:t.dataset.s,end:t.dataset.e}; saveRange(); run(); });
+        document.getElementById("periodChips").addEventListener("click", function(ev){ var t=ev.target.closest?ev.target.closest(".chip"):ev.target; if(!t||!t.dataset||!t.dataset.s) return; RANGE={start:t.dataset.s,end:t.dataset.e,qk:t.dataset.q}; saveRange(); run(); });
         var onDate=function(){ if(dF.value&&dT.value&&dF.value<=dT.value){ RANGE={start:dF.value,end:dT.value}; saveRange(); run(); } };
         dF.addEventListener("change", onDate); dT.addEventListener("change", onDate);
       }

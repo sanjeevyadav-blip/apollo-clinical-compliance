@@ -7,7 +7,7 @@
   var CFG = {
     FIRST_MONTH: "2026-08",                 /* ticket + order data complete from August 2026 */
     /* Page 1 — penalty score (points lost per unit) */
-    D_CRITICAL: 4, D_HIGH: 3, D_MEDIUM: 2, D_OTHERS: 1,
+    D_CRITICAL: 6, D_HIGH: 4, D_MEDIUM: 2, D_OTHERS: 1,
     RAG: { green: 85, amber: 75 },          /* for 0-100 scores */
     /* Page 2 — pillar weights (must add to 100) */
     PILLAR_WEIGHTS: { quality: 25, safety: 30, experience: 20, responsiveness: 15, governance: 10 },
@@ -417,6 +417,32 @@
     return [D.through, n(D.audits), n(D.cancels), n(D.consultsDay), n(D.consultsDoc), n(D.tickets), n(D.orders), Math.round(sum*100)].join("|");
   }
 
+
+  /* quick ranges, same set as the audit dashboard: Today, Yesterday, Last 7 Days, MTD, last month, the month before,
+     Last 30 Days, All Time. Counted from today's calendar date, then cut at the data-through day (tickets and
+     orders arrive a day or two late); a range with no data yet is shown disabled. */
+  function localTodayIso(){ var d=new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+  function quickRanges(D){
+    var thr=D.through, first=CFG.FIRST_MONTH+"-01", out=[]; if(!thr) return out;
+    var T=localTodayIso(); if(T<thr) T=thr;
+    var ym=T.slice(0,7), m1=prevMonth(ym), m2=prevMonth(m1);
+    function mk(k, chip, label, s, e, extra){
+      var o={qk:k, chip:chip, label:label, start:s<first?first:s, end:e>thr?thr:e};
+      o.off = (o.start>o.end) || e<first; if(extra) for(var x in extra) o[x]=extra[x];
+      if(!o.off && o.key && o.end<e) o.partial=true;
+      return o; }
+    var Y=addDaysIso(T,-1);
+    out.push(mk("today","Today","Today",T,T));
+    out.push(mk("yesterday","Yesterday","Yesterday",Y,Y));
+    out.push(mk("7d","Last 7 Days","Last 7 days",addDaysIso(thr,-6),thr));   /* last 7 / 30 days that have data */
+    out.push(mk("mtd","MTD",monthLabel(ym)+" (MTD)",ym+"-01",T,{key:ym, partial:true}));
+    out.push(mk("m1",monthLabel(m1),monthLabel(m1),m1+"-01",monthEnd(m1),{key:m1, short:monthLabel(m1)}));
+    out.push(mk("m2",monthLabel(m2),monthLabel(m2),m2+"-01",monthEnd(m2),{key:m2, short:monthLabel(m2)}));
+    out.push(mk("30d","Last 30 Days","Last 30 days",addDaysIso(thr,-29),thr));
+    out.push(mk("all","All Time","All time",first,thr));
+    out.forEach(function(o){ if(o.key && o.start!==o.key+"-01"){ delete o.key; } });   /* month cut at the data start: compare by days */
+    return out;
+  }
   /* ---------- periods ---------- */
   function periods(D){
     var out=[]; if(!D.through) return out; var last=D.through.slice(0,7);
@@ -426,7 +452,7 @@
   }
   function previousOf(p){
     var pm=prevMonth(p.start.slice(0,7)), pmEnd=monthEnd(pm);
-    if(!p.key){ var days=daysBetween(p.start,p.end)+1, pe=addDaysIso(p.start,-1); return {start:addDaysIso(pe,-(days-1)), end:pe, label:"previous "+days+" days"}; }
+    if(!p.key){ var days=daysBetween(p.start,p.end)+1, pe=addDaysIso(p.start,-1); return {start:addDaysIso(pe,-(days-1)), end:pe, label:days===1?"previous day":"previous "+days+" days"}; }
     var e = p.partial ? pm+"-"+p.end.slice(8,10) : pmEnd; if(e>pmEnd) e=pmEnd;
     return {key:pm, start:pm+"-01", end:e, label:monthLabel(pm)+(p.partial?" (same days)":""), partial:p.partial};
   }
@@ -562,6 +588,6 @@
     return out;
   }
 
-  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, previousOf:previousOf, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
+  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, daysBetween:daysBetween, docKey:docKey, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);
