@@ -170,9 +170,9 @@
 
   /* ================= one bundle of everything for a date window ================= */
   var MEMO={};
-  function bundle(D,R,s,e){
-    var k=s+"|"+e+"|"+(D.fetchedAt?+new Date(D.fetchedAt):0)+"|"+(R._v||0); if(MEMO[k]) return MEMO[k];
-    var M=APP.metrics(D,s,e), docs=APP.doctors(D,s,e), P=APP.parameters(D,s,e), flat=[];
+  function bundle(D,R,s,e,tEnd){
+    var k=s+"|"+e+"|"+(tEnd||"")+"|"+(D.fetchedAt?+new Date(D.fetchedAt):0)+"|"+(R._v||0); if(MEMO[k]) return MEMO[k];
+    var M=APP.metrics(D,s,e,tEnd), docs=APP.doctors(D,s,e), P=APP.parameters(D,s,e), flat=[];
     Object.keys(P).forEach(function(t){ P[t].forEach(function(x){ flat.push(x); }); });
     var ranked=docs.filter(function(d){ return d.ranked; });
     var resN=0, resSum=0; M.tickets.lines.forEach(function(b){ if(b.resAvg!=null){ resN+=b.resN; resSum+=b.resAvg*b.resN; } });
@@ -707,7 +707,7 @@
       if(mode==="saved"){ chip.className="status-chip off"; txt.textContent="Saved copy · "+timeLabel(D.fetchedAt)+" · refreshing…"; }
       else if(mode==="stale"){ chip.className="status-chip warn"; txt.textContent="Saved copy · "+timeLabel(D.fetchedAt)+" (live refresh failed)"; }
       else { chip.className="status-chip"+(bad.length?" warn":""); txt.textContent=bad.length?"Partially live":"Live from Google Sheets"; }
-      chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n"); document.getElementById("through").textContent=U.dateLabel(D.through); }
+      chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n"); document.getElementById("through").textContent=U.dateLabel(D.through)+(D.ordersThrough&&D.ordersThrough<D.through?" · orders to "+U.dateLabel(D.ordersThrough):""); }
     function chips(){
       var qs=PER.filter(function(p){ return p.kind==="q"; }), ms=PER.filter(function(p){ return p.kind==="r"; });
       function chip(p){ var id=p.kind==="q"?"q"+p.q+"_"+p.fy:"r"+p.qk, txt=p.kind==="r"?p.chip:p.label;
@@ -721,10 +721,11 @@
       if(saved){ var m=PER.filter(function(p){ return !p.off && p.kind===saved.kind && (p.kind==="q"?(p.q===saved.q&&p.fy===saved.fy):p.qk===saved.qk); })[0]; if(m) return m; }
       return qs[qs.length-1]||PER[0]; }
     function render(){
-      var p=SEL, pvR=previous(p,PER), B=bundle(D,R,p.start,p.end), PB=pvR?bundle(D,R,pvR.start,pvR.end):null;
+      var p=SEL, pvR=previous(p,PER), B=bundle(D,R,p.start,p.end), PB=pvR?bundle(D,R,pvR.start,pvR.end,APP.ticketEndFor(D,p,pvR)):null;
       var ctx={D:D, R:R, PER:PER, p:p, pv:pvR, s:p.start, e:p.end, B:B, PB:PB, cmp:!!(PB&&!B.M.audit.incomplete&&!PB.M.audit.incomplete)}; CTX=ctx;
       document.getElementById("rangeLabel").innerHTML=U.dateLabel(p.start)+" &ndash; "+U.dateLabel(p.end)+(pvR?' &middot; compared with <b>'+esc(pvR.label)+'</b>':'');
       var notes=[]; if(B.M.audit.incomplete) notes.push('<b>Audit data is incomplete for this period.</b> The audit sheets hold audits only from '+B.M.audit.missing.map(function(m){ return m.from?U.dateLabel(m.from):"(none)"; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(", ")+'. Audit-based numbers cover what the sheets still hold; audit comparisons are hidden.');
+      (function(){ var M=B.M, o=M.ordersThrough; if(!o) return; if(M.noOrders) notes.push('<b>No order data yet for this range.</b> The Orders tab runs to '+U.dateLabel(o)+', so the score and ticket rates per 1,000 orders can\u2019t be worked out yet. Audit numbers are shown in full.'); else if(M.ticketsWaiting) notes.push('<b>'+fi(M.ticketsWaiting)+' tickets dated after '+U.dateLabel(o)+' are not counted yet.</b> The Orders tab runs to '+U.dateLabel(o)+', so ticket numbers stop there until the order counts for the later days arrive. Audit numbers cover the full range.'); })();
       if(p.partialStart) notes.push('Ticket and order data start on 1 Aug 2026, so '+esc(p.short)+' covers August and September only.');
       document.getElementById("notes").innerHTML=notes.map(UI.note).join("");
       var y=root.scrollY||0;
