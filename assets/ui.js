@@ -183,15 +183,20 @@
       else if(mode==="stale"){ chip.className="status-chip warn"; txt.textContent="Saved copy · "+timeLabel(D.fetchedAt)+" (live refresh failed)"; }
       else { chip.className="status-chip"+(bad.length?" warn":""); txt.textContent = bad.length ? "Partially live" : "Live from Google Sheets"; }
       chip.title=Object.keys(st).map(function(k){ return k+": "+st[k]; }).join("\n")+(D.fetchedAt?"\nRead at "+timeLabel(D.fetchedAt):"");
-      document.getElementById("through").textContent=U.dateLabel(D.through);
+      document.getElementById("through").textContent=U.dateLabel(D.through)+(D.ordersThrough&&D.ordersThrough<D.through?" · orders to "+U.dateLabel(D.ordersThrough):"");
     }
+    function waitNote(M, lab){ var o=M.ordersThrough; if(!o) return null;
+      if(M.noOrders) return "<b>No order data yet for this range.</b> The Orders tab runs to "+lab(o)+", so the score and the ticket rates per 1,000 orders can\u2019t be worked out yet"+(M.ticketsWaiting?" ("+M.ticketsWaiting.toLocaleString("en-IN")+" tickets are waiting for their order counts)":"")+". Audit numbers are shown in full.";
+      if(M.ticketsWaiting) return "<b>"+M.ticketsWaiting.toLocaleString("en-IN")+" tickets dated after "+lab(o)+" are not counted yet.</b> The Orders tab runs to "+lab(o)+", so ticket numbers stop there until the order counts for the later days arrive. Audit numbers cover the full range.";
+      return null; }
     function run(){
       var s=RANGE.start, e=RANGE.end, hit=function(x){ return !x.off&&x.start===s&&x.end===e; }, p=(RANGE.qk?CH.filter(function(x){ return hit(x)&&x.qk===RANGE.qk; })[0]:null)||CH.filter(hit)[0]||PER.filter(hit)[0]||{start:s,end:e,label:U.dateLabel(s)+" – "+U.dateLabel(e)};
-      var pv=APP.previousOf(p), M=APP.metrics(D,s,e), PM=(pv.start>=APP.CFG.FIRST_MONTH+"-01")?APP.metrics(D,pv.start,pv.end):null;
+      var pv=APP.previousOf(p), M=APP.metrics(D,s,e), PM=(pv.start>=APP.CFG.FIRST_MONTH+"-01")?APP.metrics(D,pv.start,pv.end,APP.ticketEndFor(D,{start:s,end:e},pv)):null;
       document.getElementById("dFrom").value=s; document.getElementById("dTo").value=e;
       document.getElementById("rangeLabel").innerHTML=U.dateLabel(s)+" &ndash; "+U.dateLabel(e)+(PM?' &middot; compared with <b>'+esc(pv.label)+'</b>':'');
       Array.prototype.forEach.call(document.querySelectorAll("#periodChips .chip"), function(c){ c.classList.toggle("on", c.dataset.q===(p.qk||"")); });
       var notes=[]; if(M.audit.incomplete && opts.usesAudits!==false) notes.push("<b>Audit data is incomplete for this period.</b> "+M.audit.missing.map(function(m){ return esc(m.type)+" audits are held only from "+(m.from?U.dateLabel(m.from):"(none)"); }).join("; ")+". Audit-based numbers cover what the live sheets still hold.");
+      var wn=waitNote(M, U.dateLabel); if(wn) notes.push(wn);
       document.getElementById("notes").innerHTML=notes.map(note).join("");
       var ctx={D:D, M:M, PM:PM, p:p, pv:pv, s:s, e:e, periods:PER, auditCmp:!!(PM&&!PM.audit.incomplete&&!M.audit.incomplete)};
       var y=root.scrollY||0;

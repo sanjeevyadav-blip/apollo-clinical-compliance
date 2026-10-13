@@ -376,7 +376,8 @@
       if(arcPartial) status["Past audit sheets"]="partial (a past sheet failed)";
       var D={audits:audits, defs:defs, cancels:r[1], consultsDay:r[2], consultsDoc:r[3], tickets:r[4].concat(r[5]), orders:r[6], status:status, fetchedAt:new Date()};
       var tMax=D.tickets.reduce(function(m,x){ return x.date>m?x.date:m; },""), oMax=D.orders.reduce(function(m,x){ return x.date>m?x.date:m; },"");
-      D.through = (tMax&&oMax) ? (tMax<oMax?tMax:oMax) : (tMax||oMax||null);
+      /* dates run to the latest ticket day; ticket rates use only days the Orders tab already has */
+      D.through = (tMax>oMax?tMax:oMax)||null; D.ordersThrough = oMax||null; D.ticketsThrough = tMax||null;
       D.auditFrom={}; D.audits.forEach(function(a){ if(a.a && (!D.auditFrom[a.type]||a.a<D.auditFrom[a.type])) D.auditFrom[a.type]=a.a; });
       D.medicineRows = r[5].length;
       return D;
@@ -465,8 +466,13 @@
   function clamp(v){ return v==null?null:Math.max(0,Math.min(100,v)); }
 
   /* ---------- metrics for one window ---------- */
-  function metrics(D, s, e){
+  /* comparison windows: when the current range runs past the last day in the Orders tab, cut the comparison's
+     ticket days by the same number of days, so both sides compare like with like */
+  function ticketEndFor(D, cur, pv){ var o=D.ordersThrough||D.through; if(!o||!pv||!(cur.end>o)||cur.start>o) return null;
+    var lag=Math.round((new Date(cur.end+"T00:00:00Z")-new Date(o+"T00:00:00Z"))/86400000); return addDaysIso(pv.end,-lag); }
+  function metrics(D, s, e, tEnd){
     function inR(d){ return d && d>=s && d<=e; }
+    function inT(d){ return inR(d) && (!tEnd || d<=tEnd); }
     var M={start:s, end:e};
     /* audits */
     var P={}; PROJECTS.forEach(function(p){ P[p]={type:p, audits:0, scored:0, sum:0, zero:0, pass:0, consults:0, leads:0, leadsDone:0, nzN:0, nzSum:0}; });
@@ -500,9 +506,9 @@
 
     /* tickets */
     var B={}; BUS.forEach(function(b){ B[b.key]={key:b.key, label:b.label, orders:0, high:0, medium:0, tickets:0, pending:0, aged:0, frtIn:0, frtN:0, resIn:0, resN:0, frtSum:0, resSum:0, cats:{}, stages:{}}; });
-    D.orders.forEach(function(o){ if(inR(o.date) && B[o.bu]) B[o.bu].orders+=o.orders; });
-    var asOf = D.through || e;
-    D.tickets.forEach(function(t){ if(!inR(t.date)) return; var b=B[t.bu]; if(!b) return; var sla=CFG.SLA[t.sev];
+    D.orders.forEach(function(o){ if(inT(o.date) && B[o.bu]) B[o.bu].orders+=o.orders; });
+    var asOf = D.through || e, oT = D.ordersThrough; M.ticketsWaiting=0; M.ordersThrough=oT; M.noOrders = !!(oT && s>oT);
+    D.tickets.forEach(function(t){ if(!inT(t.date)) return; if(oT && t.date>oT){ M.ticketsWaiting++; return; } var b=B[t.bu]; if(!b) return; var sla=CFG.SLA[t.sev];
       b.tickets++; if(t.sev==="High") b.high++; else b.medium++;
       var pend=/pending|open/i.test(t.status);
       if(pend){ b.pending++; if(daysBetween(t.date, asOf)*24 > sla.res) b.aged++; }
@@ -529,7 +535,7 @@
     /* Page 1 — penalty score */
     var Dd={ critical:{rate:A.criticalPct, w:CFG.D_CRITICAL}, high:{rate:T.highPer1k, w:CFG.D_HIGH}, medium:{rate:T.medPer1k, w:CFG.D_MEDIUM}, others:{rate:A.nonZeroAvg!=null?100-A.nonZeroAvg:null, w:CFG.D_OTHERS} };
     var lost=0, have=0; Object.keys(Dd).forEach(function(k){ var x=Dd[k]; x.pts=x.rate==null?null:x.rate*x.w; if(x.pts!=null){ lost+=x.pts; have++; } });
-    Dd.total=lost; M.ded=Dd; M.penalty = have ? Math.max(0,100-lost) : null;
+    Dd.total=lost; M.ded=Dd; M.penalty = (have && !M.noOrders) ? Math.max(0,100-lost) : null;
 
     /* Page 2 — pillars (each 0-100) */
     var PIL={};
@@ -588,6 +594,6 @@
     return out;
   }
 
-  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
+  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, daysBetween:daysBetween, docKey:docKey, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);
