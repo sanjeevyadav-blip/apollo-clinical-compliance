@@ -34,7 +34,7 @@
     /* Page 9 — business-line owners (edit names here) */
     OWNERS: { consult: "Consult head (to assign)", pharma: "Pharmacy head (to assign)", diagnostics: "Diagnostics head (to assign)" },
     /* sources */
-    FILE_TICKETS: "1KlB3BOa5VRWux7_6ZTJyP13rA9SRtYoLrBjvtLUcaKU", GID_TICKETS_DATA: "0", GID_TICKETS_MED: "544383008", GID_ORDERS: "1380383189",
+    FILE_TICKETS: "1KlB3BOa5VRWux7_6ZTJyP13rA9SRtYoLrBjvtLUcaKU", GID_TICKETS_DATA: "0", GID_TICKETS_MED: "544383008", GID_ORDERS: "1767514440",
     FILE_AUDIT: "1GUocnux4UV3hDTs0fgQuRF9HHN1VJo4sj1j2kd4YkMA", FILE_WLP: "15S35EFbog1e00UwEByq0bQomvaw5OaBrHCkib_vHXzQ",
     FILE_CANCEL: "1AACuecSEz3JvPZPSwpzCj6XVWEkF8kY6NWlYHGZi7cY", CANCEL_GID: "909502922", CANCEL_NEW_TAB: "PDS_Cancellation_Sheet_2", CANCEL_SWITCH_DATE: "2026-09-28",
     FILE_CONSULT: "10uJxWSe0jWpfuJRA5girKGafhm7y_GLEw1tW5zz_hHg", CONSULT_GID: "1752463132"
@@ -47,6 +47,11 @@
     diagnostics: ["Wrong Report Received", "Hematoma", "Report Challenge"]
   };
   var HIGH_L = {}; Object.keys(HIGH).forEach(function(b){ HIGH_L[b] = HIGH[b].map(function(x){ return x.toLowerCase(); }); });
+  /* "Did not receive complete item" started appearing in the Medicine tab in October 2026. The ticket
+     sheet's own Dashboard tab leaves it out of the Medicines totals, so it is left out here too
+     (to count it, remove it from this list). */
+  var EXCLUDE_CATS = { pharma: ["did not receive complete item"] };
+  function excluded(bu, cat){ var l=EXCLUDE_CATS[bu]; return !!(l && l.indexOf(String(cat||"").trim().toLowerCase())!==-1); }
   function severity(bu, cat){ return HIGH_L[bu].indexOf(String(cat||"").trim().toLowerCase()) !== -1 ? "High" : "Medium"; }
   /* patient-journey stage for each ticket category */
   function stageOf(bu, cat){
@@ -336,13 +341,16 @@
       if(ix.date<0||ix.cat<0) throw new Error("Medicine tab columns not found");
       var out=[];
       for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r) continue; var d=parseAnyDate(r[ix.date]); if(!d) continue;
-        var cat=(r[ix.cat]||"").trim()||"(blank)";
+        var cat=(r[ix.cat]||"").trim()||"(blank)"; if(excluded("pharma",cat)) continue;
         out.push({id:(r[ix.id]||"").trim(), date:d, bu:"pharma", cat:cat, sub:"", sev:severity("pharma",cat), stage:"pharmacy", status:(r[ix.st]||"").trim(), frt:num(r[ix.frt]), res:num(r[ix.res])}); }
       return out;
     });
   }
   function loadOrders(){
-    return gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0).then(function(rows){
+    /* read the tab by name first (its gid changes when the tab is recreated), then by gid */
+    function ok(rows){ var h=(rows[0]||[]).map(function(x){ return String(x).trim().toLowerCase(); }); return h.indexOf("bu")>=0 && h.indexOf("date")>=0 && h.indexOf("orders")>=0; }
+    return gvizCsv(CFG.FILE_TICKETS, "sheet=Orders", null, 0).then(function(rows){ return ok(rows) ? rows : gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0); },
+      function(){ return gvizCsv(CFG.FILE_TICKETS, "gid="+CFG.GID_ORDERS, null, 0); }).then(function(rows){
       var h=rows[0].map(function(x){ return String(x).trim().toLowerCase(); }); var ib=h.indexOf("bu"), id=h.indexOf("date"), io=h.indexOf("orders");
       if(ib<0||id<0||io<0) throw new Error("Orders tab columns not found");
       var out=[]; for(var i=1;i<rows.length;i++){ var r=rows[i]; if(!r) continue; var bu=(r[ib]||"").trim().toLowerCase(), d=parseAnyDate(r[id]), o=num(r[io]); if(bu&&d&&o!==null) out.push({bu:bu,date:d,orders:o}); }
@@ -377,7 +385,7 @@
       var D={audits:audits, defs:defs, cancels:r[1], consultsDay:r[2], consultsDoc:r[3], tickets:r[4].concat(r[5]), orders:r[6], status:status, fetchedAt:new Date()};
       var tMax=D.tickets.reduce(function(m,x){ return x.date>m?x.date:m; },""), oMax=D.orders.reduce(function(m,x){ return x.date>m?x.date:m; },"");
       /* dates run to the latest ticket day; ticket rates use only days the Orders tab already has */
-      D.through = (tMax>oMax?tMax:oMax)||null; D.ordersThrough = oMax||null; D.ticketsThrough = tMax||null;
+      D.through = tMax||oMax||null; D.ordersThrough = oMax||null; D.ticketsThrough = tMax||null;   /* "Data through" = last day in the ticket sheet */
       D.auditFrom={}; D.audits.forEach(function(a){ if(a.a && (!D.auditFrom[a.type]||a.a<D.auditFrom[a.type])) D.auditFrom[a.type]=a.a; });
       D.medicineRows = r[5].length;
       return D;
