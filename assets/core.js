@@ -60,6 +60,7 @@
     if(bu==="pharma") return "pharmacy";
     return "diagnostics";
   }
+  var BU_AUDITS = { pharma:["PDS","PDS- Mounjaro","WLP - Non Pharma"], consult:["Non Pharma"], diagnostics:[] };
   var SCORED = ["PDS","PDS- Mounjaro","Non Pharma","WLP - Non Pharma"];
   var PROJECTS = ["PDS","PDS- Mounjaro","PDS Cancellation","Non Pharma","WLP - Non Pharma"];
   var AUDIT_SOURCES = [
@@ -545,6 +546,21 @@
     var lost=0, have=0; Object.keys(Dd).forEach(function(k){ var x=Dd[k]; x.pts=x.rate==null?null:x.rate*x.w; if(x.pts!=null){ lost+=x.pts; have++; } });
     Dd.total=lost; M.ded=Dd; M.penalty = (have && !M.noOrders) ? Math.max(0,100-lost) : null;
 
+    /* score by business line (same weights, each line on its own audits + tickets):
+       Pharmacy = PDS + PDS- Mounjaro + WLP - Non Pharma audits + Pharmacy tickets; Consult = Non Pharma audits + Consult tickets;
+       Diagnostics = Diagnostics tickets only. Each line keeps its parts so pages can explain what moved. */
+    M.bu={};
+    BUS.forEach(function(bd){
+      var types=BU_AUDITS[bd.key]||[], au={scored:0, zero:0, nzN:0, nzSum:0, audits:0, types:types.map(function(t){ return P[t]; })};
+      au.types.forEach(function(p){ au.scored+=p.scored; au.zero+=p.zero; au.nzN+=p.nzN; au.nzSum+=p.nzSum; au.audits+=p.audits; });
+      var line=B[bd.key];
+      var d={ critical:{rate: au.scored? au.zero/au.scored*100 : null, w:CFG.D_CRITICAL}, others:{rate: au.nzN? 100-au.nzSum/au.nzN*100 : null, w:CFG.D_OTHERS},
+              high:{rate: line.orders? line.highPer1k : null, w:CFG.D_HIGH}, medium:{rate: line.orders? line.medPer1k : null, w:CFG.D_MEDIUM} };
+      var bl=0, bh=0; Object.keys(d).forEach(function(k){ var x=d[k]; x.pts=x.rate==null?null:x.rate*x.w; if(x.pts!=null){ bl+=x.pts; bh++; } });
+      d.total=bl;
+      M.bu[bd.key]={key:bd.key, label:bd.label, audit:au, line:line, ded:d, score:(bh && line.orders && !M.noOrders) ? Math.max(0,100-bl) : null};
+    });
+
     /* Page 2 — pillars (each 0-100) */
     var PIL={};
     PIL.quality = A.score;
@@ -602,6 +618,6 @@
     return out;
   }
 
-  root.APP = { loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
+  root.APP = { BU_AUDITS:BU_AUDITS, loadSaved:loadSaved, save:save, fingerprint:fingerprint, CFG:CFG, BUS:BUS, HIGH:HIGH, PROJECTS:PROJECTS, SCORED:SCORED, load:load, periods:periods, quickRanges:quickRanges, previousOf:previousOf, ticketEndFor:ticketEndFor, weeks:weeks, metrics:metrics, doctors:doctors, parameters:parameters, kpiState:kpiState, rag:rag,
     util:{ dateLabel:dateLabel, shortDate:shortDate, monthLabel:monthLabel, addDaysIso:addDaysIso, daysBetween:daysBetween, docKey:docKey, parseAnyDate:parseAnyDate } };
 })(typeof window!=="undefined" ? window : globalThis);

@@ -157,13 +157,13 @@
   /* ---------- page shell ---------- */
   function page(opts){
     var here=(location.pathname.split("/").pop()||"index.html"); if(here==="") here="index.html";
-    var navHtml='<div class="nav10-wrap"><nav class="nav10" aria-label="Pages">'+PAGES.map(function(p,i){
+    var navHtml=opts.navHtml || '<div class="nav10-wrap"><nav class="nav10" aria-label="Pages">'+PAGES.map(function(p,i){
       return '<a href="'+p.f+'"'+(p.f===here?' aria-current="page"':'')+'><span class="n">'+(i+1)+'</span><span class="t">'+p.t+'</span></a>'; }).join("")+'</nav></div>';
     var idx=PAGES.map(function(p){ return p.f; }).indexOf(here);
     var shell=navHtml+
       '<header class="top"><div class="top-id"><span class="mark">APOLLO 24|7</span><div><h1>'+esc(opts.title)+'</h1><p>'+opts.subtitle+'</p></div></div>'+
       '<div class="top-meta"><span class="status-chip off" id="status"><span class="dot"></span><span id="statusText">Loading live data…</span></span>'+
-      '<span>Data through <b id="through">—</b></span><span class="noprint"><a class="ext" href="'+AUDIT_SITE+'" target="_blank" rel="noopener">Audit dashboard &#8599;</a> &middot; <button class="btn" onclick="window.print()">Print / PDF</button></span></div></header>'+
+      '<span>Data through <b id="through">—</b></span><span class="noprint">'+(opts.navHtml?'':'<a class="ext" href="'+AUDIT_SITE+'" target="_blank" rel="noopener">Audit dashboard &#8599;</a> &middot; ')+'<button class="btn" onclick="window.print()">Print / PDF</button></span></div></header>'+
       (opts.intro?'<p class="page-intro">'+opts.intro+'</p>':'')+
       '<div class="periodbar"><span class="lbl">Range</span><div class="chips" id="periodChips"></div>'+
       '<div class="dates"><input type="date" id="dFrom" aria-label="From"><span style="color:var(--ink-soft);font-size:11px">to</span><input type="date" id="dTo" aria-label="To"></div>'+
@@ -171,7 +171,7 @@
       '<div id="notes"></div><div id="content"><div class="loading">Reading the audit, ticket, consult and order sheets…</div></div>'+
       (opts.guide?'<div class="section-label"><span class="n">?</span>How to read this page &middot; in short</div><div class="howto">'+opts.guide+'</div>':'')+
       '<div id="explain"></div>'+
-      '<footer><b style="color:var(--ink)">Page '+(idx+1)+' of 10.</b> All numbers are read live from the Google Sheets each time the page opens (a saved copy is shown instantly while the live read finishes). Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
+      '<footer><b style="color:var(--ink)">'+(opts.pageLabel || ('Page '+(idx+1)+' of 10.'))+'</b> All numbers are read live from the Google Sheets each time the page opens (a saved copy is shown instantly while the live read finishes). Settings such as weights, targets and ticket deadlines are listed on each page where they are used. '+
       'Ticket data starts August 2026. Audits include the past-data sheets, so audit history is complete from August 2026 onwards.</footer>';
     var wrap=document.createElement("div"); wrap.className="wrap"; wrap.innerHTML=shell; document.body.appendChild(wrap);
 
